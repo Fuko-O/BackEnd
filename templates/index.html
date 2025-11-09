@@ -5,23 +5,61 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mon Copilote Budget</title>
     <style>
-        /* (Tout le CSS de base est identique) */
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f7f6; margin: 0; display: flex; justify-content: center; }
-        .app-container { width: 100%; max-width: 400px; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 24px; margin-top: 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        
+        /* --- NOUVEAU : Style pour l'écran de connexion --- */
+        .login-container {
+            text-align: center;
+            margin-top: 20vh; /* 20% du haut de l'écran */
+            padding: 30px;
+            width: 100%;
+            max-width: 400px;
+        }
+        .login-container h1 {
+            font-size: 28px;
+            color: #333;
+        }
+        .login-container p {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        #connect-bank-btn {
+            padding: 18px 30px;
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+            background-color: #007aff;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #connect-bank-btn:hover {
+            background-color: #0056b3;
+        }
+        /* --- FIN NOUVEAU CSS --- */
+
+
+        .app-container { width: 100%; max-width: 400px; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 24px; }
+        
         #dashboard-principal { background: linear-gradient(135deg, #007aff, #00c6ff); color: white; padding: 20px; border-radius: 10px; text-align: center; margin-bottom: 20px; }
         #dashboard-principal h2 { margin: 0 0 5px 0; font-size: 16px; font-weight: 500; }
         #dashboard-principal .montant-total { font-size: 36px; font-weight: 700; }
         #dashboard-principal .montant-jour { font-size: 15px; opacity: 0.85; }
+        
         h1 { font-size: 24px; margin-top: 0; text-align: center; }
         .button-group { display: flex; gap: 10px; margin-bottom: 20px; }
         button { flex: 1; padding: 15px 10px; font-size: 14px; font-weight: bold; color: #fff; background-color: #007aff; border: none; border-radius: 8px; cursor: pointer; }
         button:disabled { background-color: #aaa; }
         #analyze-budget-button { background-color: #34c759; }
+        
         #budget-coach { margin-top: 20px; background: #eef7ff; border: 1px solid #d0e8ff; border-radius: 8px; padding: 16px; }
         .coach-message { font-size: 15px; font-style: italic; color: #003d7a; margin-bottom: 15px; }
         .enveloppe { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; }
         .enveloppe-categorie { font-weight: 600; }
         .enveloppe-montant { font-weight: bold; color: #007aff; }
+
         #transactions-list { margin-top: 20px; padding: 0; list-style: none; }
         .transaction-item { padding: 12px; border-bottom: 1px solid #eee; }
         .transaction-libelle { font-size: 14px; font-weight: 500; color: #333; }
@@ -38,7 +76,6 @@
         #new-transaction-form input { width: 95%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
         #new-transaction-form { display: none; } 
 
-        /* Le champ "Objectif" */
         #goal-section {
             background: #f9f9f9; border: 1px solid #eee; border-radius: 8px;
             padding: 16px; margin-bottom: 20px; display: none;
@@ -49,7 +86,6 @@
             border-radius: 4px; font-size: 16px; text-align: center;
         }
 
-        /* CSS de la Modale (Pop-up) */
         .modal-backdrop {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.6); display: none; align-items: center;
@@ -73,63 +109,68 @@
 </head>
 <body>
 
-    <div class="app-container">
-        
-        <div id="dashboard-principal" style="display: none;">
-            <h2>Votre Reste à Vivre (Épargne)</h2>
-            <div class="montant-total" id="reste-total">... €</div>
-            <div class="montant-jour" id="reste-jour">... € par jour</div>
-        </div>
-
-        <h1>Mon Copilote</h1>
-        
-        <div id="goal-section">
-            <label for="savings-goal">🎯 Objectif d'épargne ce mois-ci ?</label>
-            <input type="number" id="savings-goal" placeholder="ex: 100" value="100">
-        </div>
-
-        <div class="button-group">
-            <button id="analyze-button">1. Lancer l'analyse IA</button>
-            <button id="analyze-budget-button" disabled>2. Créer mon budget</button>
-        </div>
-        
-        <div id="budget-coach" style="display: none;">
-            <h3>🚀 La proposition du Coach</h3>
-            <div class="coach-message" id="coach-message-text"></div>
-            <div id="enveloppes-list"></div>
-        </div>
-        
-        <hr>
-        
-        <h3>Mes Dépenses</h3>
-        <ul id="transactions-list">
-            </ul>
-        
-        <form id="new-transaction-form">
-            <h3>Simulateur : Nouvelle dépense</h3>
-            <div>
-                <input type="text" id="new-tx-libelle" placeholder="Libellé (ex: Burger King)" required>
-            </div>
-            <div>
-                <input type="number" id="new-tx-montant" placeholder="Montant (ex: 25)" step="0.01" required>
-            </div>
-            <button type="submit">Ajouter & Mettre à jour le budget</button>
-        </form>
-
+    <div id="login-view" class="login-container">
+        <h1>Bienvenue sur Mon Copilote</h1>
+        <p>Connectez votre banque pour analyser vos dépenses et créer votre budget sur-mesure.</p>
+        <button id="connect-bank-btn">Connecter ma banque (Simulation)</button>
     </div>
 
-    <div id="category-modal-backdrop" class="modal-backdrop">
-        <div class="modal-content">
-            <h3 id="modal-title">Catégoriser la transaction</h3>
-            <p id="modal-tx-libelle">...</p>
-            <div id="modal-category-buttons" class="category-grid">
+    <div id="dashboard-view" style="display: none;">
+    
+        <div class="app-container">
+            <div id="dashboard-principal" style="display: none;">
+                <h2>Votre Reste à Dépenser</h2>
+                <div class="montant-total" id="reste-total">... €</div>
+                <div class="montant-jour" id="reste-jour">... € par jour</div>
             </div>
-            <button id="modal-cancel-btn">Annuler</button>
-        </div>
-    </div>
 
-    <script>
-        // --- 1. CONFIGURATION ---
+            <h1>Mon Copilote</h1>
+            
+            <div id="goal-section">
+                <label for="savings-goal">🎯 Objectif d'épargne ce mois-ci ?</label>
+                <input type="number" id="savings-goal" placeholder="ex: 100" value="100">
+            </div>
+
+            <div class="button-group">
+                <button id="analyze-button" style="display: none;">1. Lancer l'analyse IA</button>
+                <button id="analyze-budget-button" disabled>2. Créer mon budget</button>
+            </div>
+            
+            <div id="budget-coach" style="display: none;">
+                <h3>🚀 La proposition du Coach</h3>
+                <div class="coach-message" id="coach-message-text"></div>
+                <div id="enveloppes-list"></div>
+            </div>
+            
+            <hr>
+            
+            <h3>Mes Dépenses</h3>
+            <ul id="transactions-list"></ul>
+            
+            <form id="new-transaction-form">
+                <h3>Simulateur : Nouvelle dépense</h3>
+                <div>
+                    <input type="text" id="new-tx-libelle" placeholder="Libellé (ex: Burger King)" required>
+                </div>
+                <div>
+                    <input type="number" id="new-tx-montant" placeholder="Montant (ex: 25)" step="0.01" required>
+                </div>
+                <button type="submit">Ajouter & Mettre à jour le budget</button>
+            </form>
+        </div>
+
+        <div id="category-modal-backdrop" class="modal-backdrop">
+            <div class="modal-content">
+                <h3 id="modal-title">Catégoriser la transaction</h3>
+                <p id="modal-tx-libelle">...</p>
+                <div id="modal-category-buttons" class="category-grid">
+                </div>
+                <button id="modal-cancel-btn">Annuler</button>
+            </div>
+        </div>
+        
+    </div> <script>
+        // --- 1. CONFIGURATION (inchangée) ---
         const CATEGORIES_PREDEFINIES = [
             "Charges Fixes", "Alimentation", "Abonnements", "Sorties", 
             "Shopping", "Santé", "Transport", "Épargne", "Autres"
@@ -148,6 +189,12 @@
         ];
         
         // --- 2. ÉLÉMENTS HTML ---
+        // NOUVEAUX ÉLÉMENTS DE VUE
+        const loginView = document.getElementById('login-view');
+        const dashboardView = document.getElementById('dashboard-view');
+        const connectBankBtn = document.getElementById('connect-bank-btn');
+        
+        // (Éléments de l'app - inchangés)
         const analyzeButton = document.getElementById('analyze-button');
         const transactionsList = document.getElementById('transactions-list');
         const analyzeBudgetButton = document.getElementById('analyze-budget-button');
@@ -167,31 +214,30 @@
         const modalCategoryButtons = document.getElementById('modal-category-buttons');
         const modalCancelBtn = document.getElementById('modal-cancel-btn');
 
-        // --- 3. MÉMOIRE LOCALE ---
+        // --- 3. MÉMOIRE LOCALE (inchangée) ---
         let transactionsNettoyees = []; 
         let currentBudget = {}; 
         let txIdEnCoursDeCategorisation = null; 
 
-        // --- 4. FONCTIONS DE COMMUNICATION ---
+        // --- 4. FONCTIONS DE COMMUNICATION (inchangées) ---
         async function fetchCategorizedTransaction(transaction) {
-            try {
-                const response = await fetch('https://banque-ia.onrender.com/api/categorize', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(transaction)
-                });
-                return await response.json();
-            } catch (error) {
-                console.error("Erreur de connexion au 'Cerveau':", error);
-                return { ...transaction, categorie: "Erreur", sous_categorie: "Vérifier le serveur" };
+            // On utilise une URL relative pour que ça marche en local ET sur Render
+            const response = await fetch('/api/categorize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(transaction)
+            });
+            if (!response.ok) {
+                 console.error("Erreur de connexion au 'Cerveau'");
+                 return { ...transaction, categorie: "Erreur", sous_categorie: "Vérifier le serveur" };
             }
+            return await response.json();
         }
         
-        // --- 5. FONCTIONS D'AFFICHAGE ---
+        // --- 5. FONCTIONS D'AFFICHAGE (inchangées) ---
         function displayTransactions(transactions) {
             transactionsList.innerHTML = ''; 
             transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
-            
             for (const tx of transactions) {
                 const item = document.createElement('li');
                 item.className = 'transaction-item';
@@ -237,13 +283,14 @@
 
         function updateDashboardRealTime(newTransaction) {
             if (newTransaction.montant < 0) {
+                // 1. Mettre à jour le Reste à Dépenser (bloc bleu)
                 currentBudget.reste_a_vivre_total += newTransaction.montant; 
                 const joursRestants = 30 - (new Date().getDate());
                 currentBudget.reste_a_vivre_jour = currentBudget.reste_a_vivre_total / (joursRestants > 0 ? joursRestants : 1);
-                
                 resteTotalText.innerText = `${currentBudget.reste_a_vivre_total.toFixed(2)} €`;
                 resteJourText.innerText = `soit ${currentBudget.reste_a_vivre_jour.toFixed(2)} € par jour`;
 
+                // 2. Mettre à jour l'enveloppe spécifique
                 const categorie = newTransaction.categorie;
                 if (categorie && categorie !== 'A_VERIFIER') {
                     const enveloppe = currentBudget.enveloppes_proposees.find(e => e.categorie === categorie);
@@ -259,8 +306,17 @@
         }
 
         // --- 6. LOGIQUE DES BOUTONS ET ACTIONS ---
+        
+        // --- NOUVEAU : Clic sur le bouton de connexion
+        connectBankBtn.addEventListener('click', () => {
+            loginView.style.display = 'none';
+            dashboardView.style.display = 'block';
+            
+            // On lance l'analyse !
+            analyzeButton.click(); 
+        });
 
-        // Bouton 1 : Analyser
+        // Bouton 1 : Analyser (maintenant appelé par le bouton de connexion)
         analyzeButton.addEventListener('click', async () => {
             transactionsList.innerHTML = '<li>Analyse par l\'IA en cours...</li>';
             transactionsNettoyees = await Promise.all(transactions_brutes.map(tx => fetchCategorizedTransaction(tx)));
@@ -273,7 +329,7 @@
             analyzeBudgetButton.disabled = false;
         });
         
-        // Clic sur "Catégoriser ?" (ouvre la modale)
+        // Clic sur "Catégoriser ?" (Modale) (inchangé)
         transactionsList.addEventListener('click', (event) => {
             if (event.target.classList.contains('categorize-btn')) {
                 txIdEnCoursDeCategorisation = event.target.dataset.txId;
@@ -283,27 +339,22 @@
             }
         });
         
-        // Clic sur un bouton de catégorie dans la modale
+        // Clic sur un bouton de catégorie dans la modale (inchangé)
         async function onCategorieSelectionnee(nouvelleCategorie) {
             if (!txIdEnCoursDeCategorisation) return; 
-
             const txNettoyee = transactionsNettoyees.find(tx => tx.id === txIdEnCoursDeCategorisation);
             const txBrute = transactions_brutes.find(tx => tx.id === txIdEnCoursDeCategorisation) || txNettoyee;
-
             txNettoyee.categorie = nouvelleCategorie;
             txNettoyee.sous_categorie = "Validé par l'utilisateur";
             txNettoyee.methode = "Utilisateur";
-            
             displayTransactions(transactionsNettoyees);
-            
             if (currentBudget.reste_a_vivre_total !== undefined) {
                  updateDashboardRealTime(txNettoyee);
             }
-            
             const motCle = txBrute.libelle.toUpperCase(); 
             if (motCle) {
                 try {
-                    await fetch('https://banque-ia.onrender.com/api/learn_rule', {
+                    await fetch('/api/learn_rule', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -315,24 +366,21 @@
                     console.error("Erreur, impossible d'enseigner au Cerveau:", error);
                 }
             }
-            
             categoryModalBackdrop.classList.remove('visible');
             txIdEnCoursDeCategorisation = null;
         }
 
-        // Connexion des boutons de la modale
+        // Connexion des boutons de la modale (inchangé)
         modalCancelBtn.addEventListener('click', () => {
             categoryModalBackdrop.classList.remove('visible');
             txIdEnCoursDeCategorisation = null;
         });
-        
         modalCategoryButtons.addEventListener('click', (event) => {
             if (event.target.classList.contains('category-button')) {
                 const categorieChoisie = event.target.dataset.categorie;
                 onCategorieSelectionnee(categorieChoisie);
             }
         });
-        
         function populerModalCategories() {
             for (const categorie of CATEGORIES_PREDEFINIES) {
                 if (categorie === "Revenus" || categorie === "Épargne") continue;
@@ -344,85 +392,72 @@
             }
         }
         
-        // Bouton 2 : Créer le budget (MODIFIÉ)
+        // Bouton 2 : Créer le budget (MODIFIÉ pour URL relative)
         analyzeBudgetButton.addEventListener('click', async () => {
             const aVerifier = transactionsNettoyees.find(tx => tx.categorie === 'A_VERIFIER');
             if (aVerifier) { 
                 alert("Veuillez d'abord catégoriser toutes les transactions !");
                 return;
             }
-            
             const objectifEpargne = parseFloat(savingsGoalInput.value) || 0;
-            
             try {
                 const payload = {
                     transactions: transactionsNettoyees,
                     objectif: objectifEpargne
                 };
-
-                const response = await fetch('https://banque-ia.onrender.com/api/create_budget', {
+                const response = await fetch('/api/create_budget', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-                
                 const budgetProposal = await response.json();
-                
                 budgetProposal.enveloppes_proposees.forEach(env => {
                     env.montant_restant = env.enveloppe_proposee;
                 });
-
                 currentBudget = budgetProposal; 
                 displayBudgetProposal(currentBudget);
-                
                 analyzeBudgetButton.disabled = true;
                 analyzeBudgetButton.innerText = "Budget Créé";
                 goalSection.style.display = 'none';
-                
             } catch (error) { 
                 console.error("Erreur de l'API Coach:", error);
             }
         });
         
-        // Formulaire d'ajout de dépense (DE RETOUR)
+        // Formulaire d'ajout de dépense (inchangé)
         newTransactionForm.addEventListener('submit', async (event) => {
             event.preventDefault(); 
             const libelle = newTxLibelle.value;
             let montant = parseFloat(newTxMontant.value);
-
             if (!libelle || !montant) {
                 alert("Veuillez remplir les deux champs.");
                 return;
             }
             if (montant > 0) { montant = -montant; }
-            
             const newTxBrute = {
                 'id': 'tx-' + Date.now(),
                 'date': new Date().toISOString().split('T')[0],
                 'libelle': libelle.toUpperCase(),
                 'montant': montant
             };
-            
             transactions_brutes.push(newTxBrute); 
             const newTxNettoyee = await fetchCategorizedTransaction(newTxBrute);
             transactionsNettoyees.push(newTxNettoyee);
             displayTransactions(transactionsNettoyees); 
-            
             if (currentBudget.reste_a_vivre_total !== undefined) {
                  updateDashboardRealTime(newTxNettoyee); 
             }
-            
             if (newTxNettoyee.categorie === 'A_VERIFIER') {
                 alert(`Nouvelle dépense ajoutée ! Veuillez la catégoriser dans la liste.`);
             }
-
             newTxLibelle.value = '';
             newTxMontant.value = '';
         });
         
-        // --- 7. INITIALISATION ---
+        // --- 7. INITIALISATION (MODIFIÉE) ---
         populerModalCategories();
-        displayTransactions(transactions_brutes);
+        // On n'affiche plus les transactions au début, on attend le clic de connexion.
+        // displayTransactions(transactions_brutes); 
     </script>
 </body>
 </html>
