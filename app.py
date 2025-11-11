@@ -5,13 +5,13 @@ import time
 import requests
 import re
 import math
-import psycopg2
-from urllib.parse import urlparse
+import psycopg2 
+from urllib.parse import urlparse 
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from dotenv import load_dotenv
-from flask_bcrypt import Bcrypt # <-- NOUVEAU
-from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, JWTManager # <-- NOUVEAU
+from flask_bcrypt import Bcrypt 
+from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, JWTManager 
 
 load_dotenv() 
 
@@ -20,13 +20,11 @@ app = Flask(__name__)
 CORS(app)
 
 # --- CONFIGURATION DE LA SÉCURITÉ ---
-# Change cette clé ! Ce peut être n'importe quelle chaîne secrète
-app.config["JWT_SECRET_KEY"] = "ton-super-secret-jwt-change-moi" 
+app.config["JWT_SECRET_KEY"] = "ton-super-secret-jwt-change-moi" # Change ça un jour
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
-# --- FIN SÉCURITÉ ---
 
-# --- CONFIGURATION IA (inchangée) ---
+# --- CONFIGURATION IA ---
 API_KEY = os.environ.get("GEMINI_API_KEY") 
 if not API_KEY:
     print("ERREUR FATALE : GEMINI_API_KEY n'est pas définie.")
@@ -36,7 +34,7 @@ print(f"Configuration IA : Prêt à appeler {IA_MODEL_NAME} via v1beta.")
 IA_COOLDOWN_SECONDS = 31
 LAST_IA_CALL_TIME = 0
 
-# --- CONFIGURATION BDD (inchangée) ---
+# --- CONFIGURATION BDD ---
 DATABASE_URL = os.environ.get('DATABASE_URL')
 if not DATABASE_URL:
     print("ERREUR FATALE : DATABASE_URL n'est pas définie.")
@@ -45,7 +43,7 @@ def get_db_connection():
     conn = psycopg2.connect(DATABASE_URL)
     return conn
 
-# --- 2. Initialisation BDD (MISE À JOUR MAJEURE) ---
+# --- 2. Initialisation BDD (CORRIGÉE) ---
 def init_db():
     try:
         conn = get_db_connection()
@@ -81,7 +79,7 @@ def init_db():
             categorie TEXT NOT NULL,
             sous_categorie TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES utilisateurs (id),
-            UNIQUE (user_id, mot_cle) -- Un utilisateur ne peut avoir qu'une règle par mot-clé
+            UNIQUE (user_id, mot_cle) 
         )
         """)
         
@@ -112,7 +110,6 @@ def seed_database():
         
         for mot_cle, details in base_rules.items():
             libelle, categorie, sous_categorie = details
-            # ON CONFLICT DO NOTHING = ne fait rien si "NETFLIX" existe déjà
             cursor.execute("""
             INSERT INTO regles_generales (mot_cle, libelle_nettoye, categorie, sous_categorie)
             VALUES (%s, %s, %s, %s)
@@ -126,18 +123,15 @@ def seed_database():
     except Exception as e:
         print(f"Erreur lors du 'seeding' de la BDD : {e}")
 
-# On s'assure que tout est prêt au démarrage
+# --- CORRECTION : ON APPELLE LES FONCTIONS AU DÉMARRAGE ! ---
 init_db()
 seed_database()
+# --- FIN CORRECTION ---
     
 
-# --- 3. Logique Métier (Mise à jour) ---
-
-# On n'a plus besoin de ce dictionnaire, il est dans la BDD !
-# REGLES_DE_CATEGORISATION = { ... } 
+# --- 3. Logique Métier ---
 
 def sauvegarder_regle_generale(mot_cle, libelle_nettoye, categorie, sous_categorie):
-    # C'est la fonction pour l'apprentissage automatique de l'IA
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -156,11 +150,9 @@ def sauvegarder_regle_generale(mot_cle, libelle_nettoye, categorie, sous_categor
         return False
 
 def sauvegarder_regle_personnelle(user_id, mot_cle, libelle_nettoye, categorie, sous_categorie):
-    # C'est la fonction pour le "veto" de l'utilisateur
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        # ON CONFLICT DO UPDATE = si l'utilisateur change d'avis, on met à jour sa règle
         cursor.execute("""
         INSERT INTO regles_personnelles (user_id, mot_cle, libelle_nettoye, categorie, sous_categorie)
         VALUES (%s, %s, %s, %s, %s)
@@ -186,46 +178,64 @@ def extraire_json_de_reponse(texte_brut):
     return None
 
 def appel_llm_ia(transaction):
-    # ... (fonction identique, elle appelle l'IA)
     global LAST_IA_CALL_TIME
+    
     current_time = time.time()
     time_since_last_call = current_time - LAST_IA_CALL_TIME
     if time_since_last_call < IA_COOLDOWN_SECONDS:
         wait_time = IA_COOLDOWN_SECONDS - time_since_last_call
         print(f"--- ⚠️ RESPECT DU RATE LIMIT --- En attente de {round(wait_time, 1)}s...")
         time.sleep(wait_time)
+    
     print(f"--- 🧠 Appel au VRAI LLM (via REST API) pour : '{transaction['libelle']}' ---")
     LAST_IA_CALL_TIME = time.time()
+    
     categories_valides = [
         "Charges Fixes", "Alimentation", "Abonnements", "Sorties",
         "Shopping", "Santé", "Transport", "Épargne", "Autres"
     ]
+    
     prompt = f"""
-    Tu es un expert en finances personnelles... (le prompt est identique)
+    Tu es un expert en finances personnelles.
+    Analyse la transaction : "{transaction['libelle']}"
+    Tâches :
+    1.  Propose un "libelle_nettoye" clair (ex: "Achat Fnac").
+    2.  Choisis la "categorie" la plus pertinente parmi cette liste : {json.dumps(categories_valides)}
+    RÈGLES CRITIQUES :
+    -   Si tu ne peux pas deviner, utilise la catégorie "A_VERIFIER".
+    -   Ta réponse DOIT commencer par {{" et finir par }}".
+    -   Ne réponds RIEN d'autre.
+    -   SEULEMENT l'objet JSON.
     """
+    
     request_body = { "contents": [ { "parts": [ {"text": prompt} ] } ] }
+    
     try:
         response = requests.post(IA_API_URL, json=request_body, headers={'Content-Type': 'application/json'})
         if response.status_code != 200:
             raise Exception(f"Erreur API {response.status_code}: {response.text}")
+            
         reponse_brute_ia = response.json()['candidates'][0]['content']['parts'][0]['text']
         print(f"Réponse brute de l'IA : {reponse_brute_ia}")
+
         resultat = extraire_json_de_reponse(reponse_brute_ia)
         if resultat is None:
             raise Exception("Impossible d'extraire le JSON de la réponse de l'IA.")
+
         if resultat.get('categorie') not in categories_valides and resultat.get('categorie') != 'A_VERIFIER':
             resultat['categorie'] = 'A_VERIFIER'
+            
         return {
             'libelle_nettoye': resultat.get('libelle_nettoye', transaction['libelle']),
             'categorie': resultat.get('categorie', 'A_VERIFIER'),
             'sous_categorie': "Analysé par IA"
         }
+        
     except Exception as e:
         print(f"--- ERREUR lors de l'appel à l'IA (Requests) : {e} ---")
         return {'libelle_nettoye': transaction['libelle'], 'categorie': 'A_VERIFIER', 'sous_categorie': 'Erreur IA'}
 
-# --- CLASSIFIER (MISE À JOUR MAJEURE) ---
-def classifier_transaction(transaction, user_id): # <-- On a besoin de savoir QUI
+def classifier_transaction(transaction, user_id):
     libelle_brut_upper = transaction['libelle'].upper()
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -257,7 +267,6 @@ def classifier_transaction(transaction, user_id): # <-- On a besoin de savoir QU
     resultat_llm = appel_llm_ia(transaction)
     
     if resultat_llm['categorie'] != 'A_VERIFIER':
-        # On apprend automatiquement dans la BDD GÉNÉRALE
         print(f"--- 🤖 APPRENTISSAGE AUTOMATIQUE (Général) ---")
         sauvegarder_regle_generale(
             mot_cle=libelle_brut_upper,
@@ -276,11 +285,12 @@ def classifier_transaction(transaction, user_id): # <-- On a besoin de savoir QU
         'sous_categorie': resultat_llm['sous_categorie'],
         'methode': resultat_llm['methode']
     }
-# --- FIN CLASSIFIER ---
 
 # --- 4. Routes de l'API ---
 
-# --- NOUVEAU : Routes d'Authentification ---
+@app.route('/')
+def home():
+    return render_template('index.html')
 
 @app.route('/api/signup', methods=['POST'])
 def api_signup():
@@ -291,7 +301,6 @@ def api_signup():
     if not email or not password:
         return jsonify({"msg": "Email et mot de passe requis"}), 400
 
-    # On hash le mot de passe
     pw_hash = bcrypt.generate_password_hash(password).decode('utf-8')
     
     try:
@@ -306,7 +315,6 @@ def api_signup():
         conn.close()
         return jsonify({"msg": "Utilisateur créé avec succès"}), 201
     except Exception as e:
-        # "UniqueViolation" est l'erreur si l'email existe déjà
         print(f"Erreur BDD (signup) : {e}")
         return jsonify({"msg": "Cet email existe déjà"}), 409
 
@@ -327,38 +335,24 @@ def api_login():
     conn.close()
 
     if user and bcrypt.check_password_hash(user[1], password):
-        # Le mot de passe est correct ! On crée un token.
         user_id = user[0]
         access_token = create_access_token(identity=user_id)
         return jsonify(access_token=access_token)
     else:
         return jsonify({"msg": "Email ou mot de passe incorrect"}), 401
 
-# --- FIN Routes d'Auth ---
-
-@app.route('/')
-def home():
-    return render_template('index.html')
-
-# --- Routes API (MAINTENANT SÉCURISÉES) ---
-
 @app.route('/api/categorize', methods=['POST'])
-@jwt_required() # <-- SÉCURISÉ
+@jwt_required() 
 def api_categorize():
-    user_id = get_jwt_identity() # On récupère l'ID de l'utilisateur connecté
+    user_id = get_jwt_identity()
     transaction_brute = request.json
     transaction_nettoyee = classifier_transaction(transaction_brute, user_id)
     return jsonify(transaction_nettoyee)
 
 @app.route('/api/create_budget', methods=['POST'])
-@jwt_required() # <-- SÉCURISÉ
+@jwt_required() 
 def api_create_budget():
-    # user_id = get_jwt_identity() # On n'en a pas besoin ici, mais on pourrait
-    data = request.json
-    transactions = data.get('transactions', [])
-    objectif_epargne = data.get('objectif', 0)
-    
-    # ... (le reste du code create_budget est 100% identique) ...
+    data = request.json; transactions = data.get('transactions', []); objectif_epargne = data.get('objectif', 0)
     revenus = 0; charges_fixes = 0; depenses_variables_observees = {}; total_depenses_variables = 0
     for tx in transactions:
         categorie = tx.get('categorie'); montant = tx.get('montant', 0)
@@ -389,13 +383,10 @@ def api_create_budget():
     return jsonify(reponse_coach)
 
 @app.route('/api/learn_rule', methods=['POST'])
-@jwt_required() # <-- SÉCURISÉ
+@jwt_required() 
 def api_learn_rule():
-    user_id = get_jwt_identity() # On récupère l'ID
-    data = request.json
-    mot_cle = data.get('mot_cle')
-    categorie = data.get('categorie')
-    
+    user_id = get_jwt_identity()
+    data = request.json; mot_cle = data.get('mot_cle'); categorie = data.get('categorie')
     if not mot_cle or not categorie:
         return jsonify({'status': 'erreur', 'message': 'Données manquantes'}), 400
     
@@ -414,4 +405,4 @@ def api_learn_rule():
 
 # --- 5. Lancement (On n'a plus besoin du 'if __name__ ...') ---
 # Gunicorn va juste importer le fichier et trouver l'objet 'app'.
-# L'appel à init_db() et seed_database() est maintenant aux lignes 66-67.
+# L'appel à init_db() et seed_database() est maintenant aux lignes 70-71.
