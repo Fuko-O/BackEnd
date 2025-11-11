@@ -49,7 +49,6 @@ def init_db():
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # 1. Table des Utilisateurs
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS utilisateurs (
             id SERIAL PRIMARY KEY,
@@ -58,7 +57,6 @@ def init_db():
         )
         """)
         
-        # 2. Table des Règles Générales (le savoir collectif)
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS regles_generales (
             id SERIAL PRIMARY KEY,
@@ -69,7 +67,6 @@ def init_db():
         )
         """)
         
-        # 3. Table des Règles Personnelles (le "veto" de l'utilisateur)
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS regles_personnelles (
             id SERIAL PRIMARY KEY,
@@ -123,14 +120,12 @@ def seed_database():
         print(f"Erreur lors du 'seeding' de la BDD : {e}")
 
 # --- CORRECTION : ON APPELLE LES FONCTIONS AU NIVEAU GLOBAL ---
-# Gunicorn va exécuter cela lors de l'import, avant de lancer le serveur.
 init_db()
 seed_database()
 # --- FIN CORRECTION ---
     
-
 # --- 3. Logique Métier (Inchangée) ---
-
+# ... (toutes les fonctions : sauvegarder_regle_generale, sauvegarder_regle_personnelle, extraire_json_de_reponse, appel_llm_ia, classifier_transaction)
 def sauvegarder_regle_generale(mot_cle, libelle_nettoye, categorie, sous_categorie):
     try:
         conn = get_db_connection()
@@ -286,23 +281,20 @@ def classifier_transaction(transaction, user_id):
         'methode': resultat_llm['methode']
     }
 
-# --- 4. Routes de l'API ---
-
+# --- 4. Routes de l'API (Inchangées) ---
 @app.route('/')
 def home():
     return render_template('index.html')
 
 @app.route('/api/signup', methods=['POST'])
 def api_signup():
+    # ... (code identique)
     data = request.json
     email = data.get('email')
     password = data.get('password')
-
     if not email or not password:
         return jsonify({"msg": "Email et mot de passe requis"}), 400
-
     pw_hash = bcrypt.generate_password_hash(password).decode('utf-8')
-    
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -320,20 +312,18 @@ def api_signup():
 
 @app.route('/api/login', methods=['POST'])
 def api_login():
+    # ... (code identique)
     data = request.json
     email = data.get('email')
     password = data.get('password')
-
     if not email or not password:
         return jsonify({"msg": "Email et mot de passe requis"}), 400
-        
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, password_hash FROM utilisateurs WHERE email = %s", (email,))
     user = cursor.fetchone()
     cursor.close()
     conn.close()
-
     if user and bcrypt.check_password_hash(user[1], password):
         user_id = user[0]
         access_token = create_access_token(identity=user_id)
@@ -354,6 +344,7 @@ def api_categorize():
 def api_create_budget():
     data = request.json; transactions = data.get('transactions', []); objectif_epargne = data.get('objectif', 0)
     revenus = 0; charges_fixes = 0; depenses_variables_observees = {}; total_depenses_variables = 0
+    # On boucle sur la VRAIE liste de transactions de l'utilisateur
     for tx in transactions:
         categorie = tx.get('categorie'); montant = tx.get('montant', 0)
         if categorie == 'Revenus': revenus += montant
@@ -362,6 +353,8 @@ def api_create_budget():
             if categorie not in depenses_variables_observees: depenses_variables_observees[categorie] = 0
             depenses_variables_observees[categorie] += montant
             total_depenses_variables += montant
+    
+    # ... (le reste de la logique de budget est identique)
     charges_fixes_abs = round(abs(charges_fixes), 2); revenus_observes = round(revenus, 2)
     total_depenses_variables_abs = round(abs(total_depenses_variables), 2)
     budget_variable_total_disponible = revenus_observes - charges_fixes_abs - objectif_epargne
@@ -390,7 +383,6 @@ def api_learn_rule():
     if not mot_cle or not categorie:
         return jsonify({'status': 'erreur', 'message': 'Données manquantes'}), 400
     
-    # On sauvegarde dans la BDD PERSONNELLE de l'utilisateur
     success = sauvegarder_regle_personnelle(
         user_id=user_id,
         mot_cle=mot_cle,
@@ -405,4 +397,3 @@ def api_learn_rule():
 
 # --- 5. Lancement (On n'a plus besoin du 'if __name__ ...') ---
 # Gunicorn va juste importer le fichier et trouver l'objet 'app'.
-# L'appel à init_db() et seed_database() est maintenant aux lignes 73-74.
