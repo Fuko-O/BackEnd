@@ -22,35 +22,29 @@
         .login-container p { font-size: 16px; color: #666; margin-bottom: 20px; }
         .login-container .form-group { margin-bottom: 15px; }
         .login-container input {
-            width: 90%;
-            padding: 14px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            font-size: 16px;
+            width: 90%; padding: 14px; border: 1px solid #ccc;
+            border-radius: 8px; font-size: 16px;
         }
-        .login-container .button-group {
-            display: flex;
-            gap: 10px;
-        }
+        .login-container .button-group { display: flex; gap: 10px; }
         #login-btn, #signup-btn {
-            flex: 1;
-            padding: 14px;
-            font-size: 16px;
-            font-weight: 600;
-            color: #fff;
-            background-color: #007aff;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
+            flex: 1; padding: 14px; font-size: 16px; font-weight: 600;
+            color: #fff; background-color: #007aff; border: none;
+            border-radius: 10px; cursor: pointer;
         }
-        #signup-btn {
-            background-color: #34c759; /* Vert */
-        }
+        #signup-btn { background-color: #34c759; }
         #auth-error {
-            color: #ff3b30;
-            margin-top: 15px;
+            color: #ff3b30; margin-top: 15px; font-weight: 600; display: none;
+        }
+        /* Lien pour basculer */
+        .auth-toggle {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #555;
+        }
+        .auth-toggle a {
+            color: #007aff;
             font-weight: 600;
-            display: none;
+            cursor: pointer;
         }
         /* --- FIN NOUVEAU CSS --- */
 
@@ -67,7 +61,7 @@
         button { flex: 1; padding: 15px 10px; font-size: 14px; font-weight: bold; color: #fff; background-color: #007aff; border: none; border-radius: 8px; cursor: pointer; }
         button:disabled { background-color: #aaa; }
         #analyze-budget-button { background-color: #34c759; }
-        #logout-btn { background-color: #ff3b30; } /* Bouton déconnexion */
+        #logout-btn { background-color: #ff3b30; } 
         
         #budget-coach { margin-top: 20px; background: #eef7ff; border: 1px solid #d0e8ff; border-radius: 8px; padding: 16px; }
         .coach-message { font-size: 15px; font-style: italic; color: #003d7a; margin-bottom: 15px; }
@@ -125,18 +119,37 @@
 <body>
 
     <div id="login-view" class="login-container">
-        <h1>Bienvenue</h1>
-        <p>Connectez-vous ou créez un compte pour piloter votre budget.</p>
-        <div class="form-group">
-            <input type="email" id="auth-email" placeholder="Email" required>
+        
+        <div id="login-form">
+            <h1>Connexion</h1>
+            <p>Heureux de vous revoir !</p>
+            <div class="form-group">
+                <input type="email" id="login-email" placeholder="Email" required>
+            </div>
+            <div class="form-group">
+                <input type="password" id="login-password" placeholder="Mot de passe" required>
+            </div>
+            <div class="button-group">
+                <button id="login-btn">Se Connecter</button>
+            </div>
+            <p class="auth-toggle">Pas de compte ? <a id="show-signup">Inscrivez-vous</a></p>
         </div>
-        <div class="form-group">
-            <input type="password" id="auth-password" placeholder="Mot de passe" required>
+        
+        <div id="signup-form" style="display: none;">
+            <h1>Créer un compte</h1>
+            <p>Rejoignez-nous en 30 secondes.</p>
+            <div class="form-group">
+                <input type="email" id="signup-email" placeholder="Email" required>
+            </div>
+            <div class="form-group">
+                <input type="password" id="signup-password" placeholder="Mot de passe" required>
+            </div>
+            <div class="button-group">
+                <button id="signup-btn">S'inscrire</button>
+            </div>
+            <p class="auth-toggle">Déjà un compte ? <a id="show-login">Connectez-vous</a></p>
         </div>
-        <div class="button-group">
-            <button id="login-btn">Se Connecter</button>
-            <button id="signup-btn">S'inscrire</button>
-        </div>
+        
         <p id="auth-error"></p>
     </div>
 
@@ -220,16 +233,21 @@
         ];
         
         // --- 2. ÉLÉMENTS HTML ---
-        // Vues
         const loginView = document.getElementById('login-view');
         const dashboardView = document.getElementById('dashboard-view');
         
         // Auth
+        const loginForm = document.getElementById('login-form');
+        const signupForm = document.getElementById('signup-form');
+        const showSignupBtn = document.getElementById('show-signup');
+        const showLoginBtn = document.getElementById('show-login');
         const loginBtn = document.getElementById('login-btn');
         const signupBtn = document.getElementById('signup-btn');
         const logoutBtn = document.getElementById('logout-btn');
-        const authEmail = document.getElementById('auth-email');
-        const authPassword = document.getElementById('auth-password');
+        const loginEmail = document.getElementById('login-email');
+        const loginPassword = document.getElementById('login-password');
+        const signupEmail = document.getElementById('signup-email');
+        const signupPassword = document.getElementById('signup-password');
         const authError = document.getElementById('auth-error');
         
         // App
@@ -255,31 +273,29 @@
         const modalCancelBtn = document.getElementById('modal-cancel-btn');
 
         // --- 3. MÉMOIRE LOCALE ---
-        let userToken = null; // <- NOTRE TOKEN DE CONNEXION !
+        let userToken = null; 
         let transactionsNettoyees = []; 
         let currentBudget = {}; 
         let txIdEnCoursDeCategorisation = null; 
 
-        // --- 4. FONCTIONS DE COMMUNICATION (MAJEURES) ---
+        // --- 4. FONCTIONS DE COMMUNICATION (CORRIGÉES) ---
         
-        // NOUVEAU : Une fonction "fetch" sécurisée qui envoie le token
+        // La fonction "fetch" sécurisée qui envoie le token
         async function fetchSecure(url, options = {}) {
-            // On prépare les en-têtes
             const headers = {
                 'Content-Type': 'application/json',
-                ...options.headers, // On garde les en-têtes existants
+                ...options.headers,
             };
 
-            // Si on est connecté, on ajoute le token !
             if (userToken) {
                 headers['Authorization'] = `Bearer ${userToken}`;
             }
 
+            // On utilise une URL relative pour que ça marche PARTOUT
             const response = await fetch(url, { ...options, headers });
 
             if (response.status === 401) {
-                // Erreur ! L'utilisateur n'est pas (ou plus) autorisé.
-                handleLogout(); // On le déconnecte
+                handleLogout(); 
                 return null;
             }
             
@@ -287,28 +303,110 @@
                  console.error("Erreur de connexion au 'Cerveau'", await response.text());
                  return null;
             }
-            return await response.json();
+            // On vérifie si la réponse est vide (pour les 'learn_rule' par ex)
+            const text = await response.text();
+            return text ? JSON.parse(text) : {};
         }
 
         async function fetchCategorizedTransaction(transaction) {
-            // On utilise notre nouvelle fonction sécurisée
             return await fetchSecure('/api/categorize', {
                 method: 'POST',
                 body: JSON.stringify(transaction)
             });
         }
         
-        // --- 5. FONCTIONS D'AFFICHAGE (inchangées) ---
-        function displayTransactions(transactions) { /* ... (code identique) ... */ }
-        function displayBudgetProposal(proposal) { /* ... (code identique) ... */ }
-        function updateDashboardRealTime(newTransaction) { /* ... (code identique) ... */ }
+        // --- 5. FONCTIONS D'AFFICHAGE ---
+        function displayTransactions(transactions) {
+            transactionsList.innerHTML = ''; 
+            // On filtre les 'null' si un fetch a échoué
+            transactions.filter(tx => tx).sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            for (const tx of transactions) {
+                if (!tx) continue; // Sécurité
+                const item = document.createElement('li');
+                item.className = 'transaction-item';
+                const amountClass = tx.montant > 0 ? 'positive' : 'negative';
+                let categoryHtml = '';
+                if (tx.categorie === 'A_VERIFIER') {
+                    categoryHtml = `<button class="categorize-btn" data-tx-id="${tx.id}">Catégoriser ?</button>`;
+                } else {
+                    categoryHtml = `<div class="transaction-category">${tx.categorie || '...'} > ${tx.sous_categorie || '...'}</div>`;
+                }
+                item.innerHTML = `
+                    <span class="transaction-amount ${amountClass}">${tx.montant.toFixed(2)} €</span>
+                    <div class="transaction-libelle">${tx.libelle_nettoye || tx.libelle}</div>
+                    ${categoryHtml}
+                    <div class="transaction-details">${tx.date}</div>
+                `;
+                transactionsList.appendChild(item);
+            }
+        }
+
+        function displayBudgetProposal(proposal) {
+            resteTotalText.innerText = `${proposal.reste_a_vivre_total.toFixed(2)} €`;
+            resteJourText.innerText = `soit ${proposal.reste_a_vivre_jour.toFixed(2)} € par jour`;
+            dashboardPrincipal.style.display = 'block';
+            coachMessageText.innerText = proposal.message_ia;
+            
+            enveloppesList.innerHTML = '';
+            for (const env of proposal.enveloppes_proposees) {
+                const item = document.createElement('div');
+                item.className = 'enveloppe';
+                item.innerHTML = `
+                    <span class="enveloppe-categorie">${env.categorie}</span>
+                    <span class="enveloppe-montant">
+                        <span id="env-restant-${env.categorie}">${env.montant_restant.toFixed(2)}</span> €
+                        / ${env.enveloppe_proposee} €
+                    </span>
+                `;
+                enveloppesList.appendChild(item);
+            }
+            budgetCoachSection.style.display = 'block';
+            newTransactionForm.style.display = 'block'; 
+        }
+
+        function updateDashboardRealTime(newTransaction) {
+            if (newTransaction.montant < 0) {
+                currentBudget.reste_a_vivre_total += newTransaction.montant; 
+                const joursRestants = 30 - (new Date().getDate());
+                currentBudget.reste_a_vivre_jour = currentBudget.reste_a_vivre_total / (joursRestants > 0 ? joursRestants : 1);
+                
+                resteTotalText.innerText = `${currentBudget.reste_a_vivre_total.toFixed(2)} €`;
+                resteJourText.innerText = `soit ${currentBudget.reste_a_vivre_jour.toFixed(2)} € par jour`;
+
+                const categorie = newTransaction.categorie;
+                if (categorie && categorie !== 'A_VERIFIER') {
+                    const enveloppe = currentBudget.enveloppes_proposees.find(e => e.categorie === categorie);
+                    if (enveloppe) {
+                        enveloppe.montant_restant += newTransaction.montant;
+                        const spanRestant = document.getElementById(`env-restant-${categorie}`);
+                        if (spanRestant) {
+                            spanRestant.innerText = enveloppe.montant_restant.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
 
         // --- 6. LOGIQUE DES BOUTONS ET ACTIONS ---
         
         // --- NOUVEAU : Logique d'authentification ---
+        showSignupBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            loginForm.style.display = 'none';
+            signupForm.style.display = 'block';
+            authError.style.display = 'none';
+        });
+        showLoginBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            loginForm.style.display = 'block';
+            signupForm.style.display = 'none';
+            authError.style.display = 'none';
+        });
+
         signupBtn.addEventListener('click', async () => {
-            const email = authEmail.value;
-            const password = authPassword.value;
+            const email = signupEmail.value;
+            const password = signupPassword.value;
             if (!email || !password) {
                 authError.innerText = "Email et mot de passe requis.";
                 authError.style.display = 'block';
@@ -316,6 +414,7 @@
             }
             
             try {
+                // On n'utilise PAS fetchSecure, car on n'a pas de token
                 const response = await fetch('/api/signup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -324,10 +423,10 @@
                 
                 if (response.status === 201) {
                     authError.innerText = "Compte créé ! Vous pouvez vous connecter.";
-                    authError.style.display = 'block';
+                    showLoginBtn.click(); // On bascule vers le login
                 } else {
                     const error = await response.json();
-                    authError.innerText = error.msg || "Erreur lors de l'inscription.";
+                    authError.innerText = error.msg || "Erreur.";
                     authError.style.display = 'block';
                 }
             } catch (e) {
@@ -337,8 +436,8 @@
         });
 
         loginBtn.addEventListener('click', async () => {
-            const email = authEmail.value;
-            const password = authPassword.value;
+            const email = loginEmail.value;
+            const password = loginPassword.value;
             if (!email || !password) {
                 authError.innerText = "Email et mot de passe requis.";
                 authError.style.display = 'block';
@@ -346,6 +445,7 @@
             }
             
             try {
+                // On n'utilise PAS fetchSecure, car on n'a pas de token
                 const response = await fetch('/api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -356,7 +456,6 @@
                     const data = await response.json();
                     userToken = data.access_token; // <-- ON SAUVEGARDE LE TOKEN !
                     
-                    // On change d'écran
                     loginView.style.display = 'none';
                     dashboardView.style.display = 'block';
                     
@@ -379,21 +478,31 @@
         });
         
         function handleLogout() {
-            userToken = null; // On oublie le token
-            transactionsNettoyees = []; // On vide les données
+            userToken = null;
+            transactionsNettoyees = [];
             currentBudget = {};
             
-            // On réinitialise l'interface
             loginView.style.display = 'block';
             dashboardView.style.display = 'none';
             authError.innerText = "Vous avez été déconnecté.";
             authError.style.display = 'block';
+            
+            // Réinitialiser le dashboard pour la prochaine connexion
+            analyzeSection.style.display = 'block';
+            goalSection.style.display = 'none';
+            budgetButtonGroup.style.display = 'none';
+            budgetCoachSection.style.display = 'none';
+            dashboardPrincipal.style.display = 'none';
+            newTransactionForm.style.display = 'none';
         }
 
         // Bouton 1 : Analyser
         analyzeButton.addEventListener('click', async () => {
             transactionsList.innerHTML = '<li>Analyse par l\'IA en cours...</li>';
+            
+            // Le Promise.all qui appelle fetchCategorizedTransaction
             transactionsNettoyees = await Promise.all(transactions_brutes.map(tx => fetchCategorizedTransaction(tx)));
+            
             displayTransactions(transactionsNettoyees);
             
             analyzeSection.style.display = 'none';
@@ -426,7 +535,6 @@
             const motCle = txBrute.libelle.toUpperCase(); 
             if (motCle) {
                 try {
-                    // On utilise notre NOUVELLE fonction sécurisée
                     await fetchSecure('/api/learn_rule', {
                         method: 'POST',
                         body: JSON.stringify({
@@ -439,7 +547,7 @@
                 }
             }
             categoryModalBackdrop.classList.remove('visible');
-            txIdEnCoursDeCategorISATION = null;
+            txIdEnCoursDeCategorisation = null;
         }
 
         // Connexion des boutons de la modale
@@ -477,13 +585,12 @@
                     transactions: transactionsNettoyees,
                     objectif: objectifEpargne
                 };
-                // On utilise notre NOUVELLE fonction sécurisée
                 const budgetProposal = await fetchSecure('/api/create_budget', {
                     method: 'POST',
                     body: JSON.stringify(payload)
                 });
                 
-                if (budgetProposal) { // On vérifie que l'appel a réussi
+                if (budgetProposal) { 
                     budgetProposal.enveloppes_proposees.forEach(env => {
                         env.montant_restant = env.enveloppe_proposee;
                     });
@@ -515,8 +622,8 @@
                 'montant': montant
             };
             transactions_brutes.push(newTxBrute); 
-            const newTxNettoyee = await fetchCategorizedTransaction(newTxBrute); // Appelle déjà fetchSecure
-            if (newTxNettoyee) { // Si l'appel n'a pas échoué (401)
+            const newTxNettoyee = await fetchCategorizedTransaction(newTxBrute);
+            if (newTxNettoyee) {
                 transactionsNettoyees.push(newTxNettoyee);
                 displayTransactions(transactionsNettoyees); 
                 if (currentBudget.reste_a_vivre_total !== undefined) {
@@ -532,77 +639,7 @@
         
         // --- 7. INITIALISATION ---
         populerModalCategories();
-        // On n'affiche plus rien au début. On attend le login.
         
-        
-        /* Fonctions utilitaires complètes (pour être sûr) */
-        function displayTransactions(transactions) {
-            transactionsList.innerHTML = ''; 
-            transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
-            
-            for (const tx of transactions) {
-                const item = document.createElement('li');
-                item.className = 'transaction-item';
-                const amountClass = tx.montant > 0 ? 'positive' : 'negative';
-                let categoryHtml = '';
-                if (tx.categorie === 'A_VERIFIER') {
-                    categoryHtml = `<button class="categorize-btn" data-tx-id="${tx.id}">Catégoriser ?</button>`;
-                } else {
-                    categoryHtml = `<div class="transaction-category">${tx.categorie || '...'} > ${tx.sous_categorie || '...'}</div>`;
-                }
-                item.innerHTML = `
-                    <span class="transaction-amount ${amountClass}">${tx.montant.toFixed(2)} €</span>
-                    <div class="transaction-libelle">${tx.libelle_nettoye || tx.libelle}</div>
-                    ${categoryHtml}
-                    <div class="transaction-details">${tx.date}</div>
-                `;
-                transactionsList.appendChild(item);
-            }
-        }
-        function displayBudgetProposal(proposal) {
-            resteTotalText.innerText = `${proposal.reste_a_vivre_total.toFixed(2)} €`;
-            resteJourText.innerText = `soit ${proposal.reste_a_vivre_jour.toFixed(2)} € par jour`;
-            dashboardPrincipal.style.display = 'block';
-            coachMessageText.innerText = proposal.message_ia;
-            
-            enveloppesList.innerHTML = '';
-            for (const env of proposal.enveloppes_proposees) {
-                const item = document.createElement('div');
-                item.className = 'enveloppe';
-                item.innerHTML = `
-                    <span class="enveloppe-categorie">${env.categorie}</span>
-                    <span class="enveloppe-montant">
-                        <span id="env-restant-${env.categorie}">${env.montant_restant.toFixed(2)}</span> €
-                        / ${env.enveloppe_proposee} €
-                    </span>
-                `;
-                enveloppesList.appendChild(item);
-            }
-            budgetCoachSection.style.display = 'block';
-            newTransactionForm.style.display = 'block'; 
-        }
-        function updateDashboardRealTime(newTransaction) {
-            if (newTransaction.montant < 0) {
-                currentBudget.reste_a_vivre_total += newTransaction.montant; 
-                const joursRestants = 30 - (new Date().getDate());
-                currentBudget.reste_a_vivre_jour = currentBudget.reste_a_vivre_total / (joursRestants > 0 ? joursRestants : 1);
-                
-                resteTotalText.innerText = `${currentBudget.reste_a_vivre_total.toFixed(2)} €`;
-                resteJourText.innerText = `soit ${currentBudget.reste_a_vivre_jour.toFixed(2)} € par jour`;
-
-                const categorie = newTransaction.categorie;
-                if (categorie && categorie !== 'A_VERIFIER') {
-                    const enveloppe = currentBudget.enveloppes_proposees.find(e => e.categorie === categorie);
-                    if (enveloppe) {
-                        enveloppe.montant_restant += newTransaction.montant;
-                        const spanRestant = document.getElementById(`env-restant-${categorie}`);
-                        if (spanRestant) {
-                            spanRestant.innerText = enveloppe.montant_restant.toFixed(2);
-                        }
-                    }
-                }
-            }
-        }
     </script>
 </body>
 </html>
