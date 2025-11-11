@@ -342,7 +342,7 @@ def api_login():
     conn.close()
     if user and bcrypt.check_password_hash(user[1], password):
         user_id = user[0]
-        access_token = create_access_token(identity=user_id)
+        access_token = create_access_token(identity=str(user_id))
         return jsonify(access_token=access_token)
     else:
         return jsonify({"msg": "Email ou mot de passe incorrect"}), 401
