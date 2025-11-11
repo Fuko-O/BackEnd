@@ -10,33 +10,47 @@
         /* --- NOUVEAU : Style pour l'écran de connexion --- */
         .login-container {
             text-align: center;
-            margin-top: 20vh; /* 20% du haut de l'écran */
             padding: 30px;
             width: 100%;
             max-width: 400px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            margin-top: 10vh;
         }
-        .login-container h1 {
-            font-size: 28px;
-            color: #333;
-        }
-        .login-container p {
+        .login-container h1 { font-size: 28px; color: #333; }
+        .login-container p { font-size: 16px; color: #666; margin-bottom: 20px; }
+        .login-container .form-group { margin-bottom: 15px; }
+        .login-container input {
+            width: 90%;
+            padding: 14px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
             font-size: 16px;
-            color: #666;
-            margin-bottom: 30px;
         }
-        #connect-bank-btn {
-            padding: 18px 30px;
-            font-size: 18px;
+        .login-container .button-group {
+            display: flex;
+            gap: 10px;
+        }
+        #login-btn, #signup-btn {
+            flex: 1;
+            padding: 14px;
+            font-size: 16px;
             font-weight: 600;
             color: #fff;
             background-color: #007aff;
             border: none;
             border-radius: 10px;
             cursor: pointer;
-            transition: background-color 0.2s;
         }
-        #connect-bank-btn:hover {
-            background-color: #0056b3;
+        #signup-btn {
+            background-color: #34c759; /* Vert */
+        }
+        #auth-error {
+            color: #ff3b30;
+            margin-top: 15px;
+            font-weight: 600;
+            display: none;
         }
         /* --- FIN NOUVEAU CSS --- */
 
@@ -53,6 +67,7 @@
         button { flex: 1; padding: 15px 10px; font-size: 14px; font-weight: bold; color: #fff; background-color: #007aff; border: none; border-radius: 8px; cursor: pointer; }
         button:disabled { background-color: #aaa; }
         #analyze-budget-button { background-color: #34c759; }
+        #logout-btn { background-color: #ff3b30; } /* Bouton déconnexion */
         
         #budget-coach { margin-top: 20px; background: #eef7ff; border: 1px solid #d0e8ff; border-radius: 8px; padding: 16px; }
         .coach-message { font-size: 15px; font-style: italic; color: #003d7a; margin-bottom: 15px; }
@@ -110,9 +125,19 @@
 <body>
 
     <div id="login-view" class="login-container">
-        <h1>Bienvenue sur Mon Copilote</h1>
-        <p>Connectez votre banque pour analyser vos dépenses et créer votre budget sur-mesure.</p>
-        <button id="connect-bank-btn">Connecter ma banque (Simulation)</button>
+        <h1>Bienvenue</h1>
+        <p>Connectez-vous ou créez un compte pour piloter votre budget.</p>
+        <div class="form-group">
+            <input type="email" id="auth-email" placeholder="Email" required>
+        </div>
+        <div class="form-group">
+            <input type="password" id="auth-password" placeholder="Mot de passe" required>
+        </div>
+        <div class="button-group">
+            <button id="login-btn">Se Connecter</button>
+            <button id="signup-btn">S'inscrire</button>
+        </div>
+        <p id="auth-error"></p>
     </div>
 
     <div id="dashboard-view" style="display: none;">
@@ -124,16 +149,22 @@
                 <div class="montant-jour" id="reste-jour">... € par jour</div>
             </div>
 
-            <h1>Mon Copilote</h1>
+            <h1>Mon Copilote
+                <button id="logout-btn" style="font-size: 12px; padding: 8px; flex: 0.2; background-color: #ff3b30; float: right;">X</button>
+            </h1>
             
+            <div id="analyze-section">
+                <p>Analyse de vos 3 derniers mois (simulation)...</p>
+                <button id="analyze-button">1. Lancer l'analyse IA</button>
+            </div>
+
             <div id="goal-section">
                 <label for="savings-goal">🎯 Objectif d'épargne ce mois-ci ?</label>
                 <input type="number" id="savings-goal" placeholder="ex: 100" value="100">
             </div>
 
-            <div class="button-group">
-                <button id="analyze-button" style="display: none;">1. Lancer l'analyse IA</button>
-                <button id="analyze-budget-button" disabled>2. Créer mon budget</button>
+            <div class="button-group" id="budget-button-group" style="display: none;">
+                <button id="analyze-budget-button">2. Créer mon budget</button>
             </div>
             
             <div id="budget-coach" style="display: none;">
@@ -170,7 +201,7 @@
         </div>
         
     </div> <script>
-        // --- 1. CONFIGURATION (inchangée) ---
+        // --- 1. CONFIGURATION ---
         const CATEGORIES_PREDEFINIES = [
             "Charges Fixes", "Alimentation", "Abonnements", "Sorties", 
             "Shopping", "Santé", "Transport", "Épargne", "Autres"
@@ -189,15 +220,24 @@
         ];
         
         // --- 2. ÉLÉMENTS HTML ---
-        // NOUVEAUX ÉLÉMENTS DE VUE
+        // Vues
         const loginView = document.getElementById('login-view');
         const dashboardView = document.getElementById('dashboard-view');
-        const connectBankBtn = document.getElementById('connect-bank-btn');
         
-        // (Éléments de l'app - inchangés)
+        // Auth
+        const loginBtn = document.getElementById('login-btn');
+        const signupBtn = document.getElementById('signup-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const authEmail = document.getElementById('auth-email');
+        const authPassword = document.getElementById('auth-password');
+        const authError = document.getElementById('auth-error');
+        
+        // App
         const analyzeButton = document.getElementById('analyze-button');
+        const analyzeSection = document.getElementById('analyze-section');
         const transactionsList = document.getElementById('transactions-list');
         const analyzeBudgetButton = document.getElementById('analyze-budget-button');
+        const budgetButtonGroup = document.getElementById('budget-button-group');
         const budgetCoachSection = document.getElementById('budget-coach');
         const coachMessageText = document.getElementById('coach-message-text');
         const enveloppesList = document.getElementById('enveloppes-list');
@@ -214,30 +254,292 @@
         const modalCategoryButtons = document.getElementById('modal-category-buttons');
         const modalCancelBtn = document.getElementById('modal-cancel-btn');
 
-        // --- 3. MÉMOIRE LOCALE (inchangée) ---
+        // --- 3. MÉMOIRE LOCALE ---
+        let userToken = null; // <- NOTRE TOKEN DE CONNEXION !
         let transactionsNettoyees = []; 
         let currentBudget = {}; 
         let txIdEnCoursDeCategorisation = null; 
 
-        // --- 4. FONCTIONS DE COMMUNICATION (inchangées) ---
-        async function fetchCategorizedTransaction(transaction) {
-            // On utilise une URL relative pour que ça marche en local ET sur Render
-            const response = await fetch('/api/categorize', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(transaction)
-            });
+        // --- 4. FONCTIONS DE COMMUNICATION (MAJEURES) ---
+        
+        // NOUVEAU : Une fonction "fetch" sécurisée qui envoie le token
+        async function fetchSecure(url, options = {}) {
+            // On prépare les en-têtes
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers, // On garde les en-têtes existants
+            };
+
+            // Si on est connecté, on ajoute le token !
+            if (userToken) {
+                headers['Authorization'] = `Bearer ${userToken}`;
+            }
+
+            const response = await fetch(url, { ...options, headers });
+
+            if (response.status === 401) {
+                // Erreur ! L'utilisateur n'est pas (ou plus) autorisé.
+                handleLogout(); // On le déconnecte
+                return null;
+            }
+            
             if (!response.ok) {
-                 console.error("Erreur de connexion au 'Cerveau'");
-                 return { ...transaction, categorie: "Erreur", sous_categorie: "Vérifier le serveur" };
+                 console.error("Erreur de connexion au 'Cerveau'", await response.text());
+                 return null;
             }
             return await response.json();
         }
+
+        async function fetchCategorizedTransaction(transaction) {
+            // On utilise notre nouvelle fonction sécurisée
+            return await fetchSecure('/api/categorize', {
+                method: 'POST',
+                body: JSON.stringify(transaction)
+            });
+        }
         
         // --- 5. FONCTIONS D'AFFICHAGE (inchangées) ---
+        function displayTransactions(transactions) { /* ... (code identique) ... */ }
+        function displayBudgetProposal(proposal) { /* ... (code identique) ... */ }
+        function updateDashboardRealTime(newTransaction) { /* ... (code identique) ... */ }
+
+        // --- 6. LOGIQUE DES BOUTONS ET ACTIONS ---
+        
+        // --- NOUVEAU : Logique d'authentification ---
+        signupBtn.addEventListener('click', async () => {
+            const email = authEmail.value;
+            const password = authPassword.value;
+            if (!email || !password) {
+                authError.innerText = "Email et mot de passe requis.";
+                authError.style.display = 'block';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/signup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                if (response.status === 201) {
+                    authError.innerText = "Compte créé ! Vous pouvez vous connecter.";
+                    authError.style.display = 'block';
+                } else {
+                    const error = await response.json();
+                    authError.innerText = error.msg || "Erreur lors de l'inscription.";
+                    authError.style.display = 'block';
+                }
+            } catch (e) {
+                authError.innerText = "Erreur de connexion au serveur.";
+                authError.style.display = 'block';
+            }
+        });
+
+        loginBtn.addEventListener('click', async () => {
+            const email = authEmail.value;
+            const password = authPassword.value;
+            if (!email || !password) {
+                authError.innerText = "Email et mot de passe requis.";
+                authError.style.display = 'block';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    userToken = data.access_token; // <-- ON SAUVEGARDE LE TOKEN !
+                    
+                    // On change d'écran
+                    loginView.style.display = 'none';
+                    dashboardView.style.display = 'block';
+                    
+                    // On lance l'analyse !
+                    analyzeButton.click();
+                    
+                } else {
+                    const error = await response.json();
+                    authError.innerText = error.msg || "Email ou mot de passe incorrect.";
+                    authError.style.display = 'block';
+                }
+            } catch (e) {
+                authError.innerText = "Erreur de connexion au serveur.";
+                authError.style.display = 'block';
+            }
+        });
+        
+        logoutBtn.addEventListener('click', () => {
+            handleLogout();
+        });
+        
+        function handleLogout() {
+            userToken = null; // On oublie le token
+            transactionsNettoyees = []; // On vide les données
+            currentBudget = {};
+            
+            // On réinitialise l'interface
+            loginView.style.display = 'block';
+            dashboardView.style.display = 'none';
+            authError.innerText = "Vous avez été déconnecté.";
+            authError.style.display = 'block';
+        }
+
+        // Bouton 1 : Analyser
+        analyzeButton.addEventListener('click', async () => {
+            transactionsList.innerHTML = '<li>Analyse par l\'IA en cours...</li>';
+            transactionsNettoyees = await Promise.all(transactions_brutes.map(tx => fetchCategorizedTransaction(tx)));
+            displayTransactions(transactionsNettoyees);
+            
+            analyzeSection.style.display = 'none';
+            goalSection.style.display = 'block'; 
+            budgetButtonGroup.style.display = 'flex';
+        });
+        
+        // Clic sur "Catégoriser ?" (Modale)
+        transactionsList.addEventListener('click', (event) => {
+            if (event.target.classList.contains('categorize-btn')) {
+                txIdEnCoursDeCategorisation = event.target.dataset.txId;
+                const txNettoyee = transactionsNettoyees.find(tx => tx.id === txIdEnCoursDeCategorisation);
+                modalTxLibelle.innerText = txNettoyee.libelle_nettoye;
+                categoryModalBackdrop.classList.add('visible');
+            }
+        });
+        
+        // Clic sur un bouton de catégorie dans la modale
+        async function onCategorieSelectionnee(nouvelleCategorie) {
+            if (!txIdEnCoursDeCategorisation) return; 
+            const txNettoyee = transactionsNettoyees.find(tx => tx.id === txIdEnCoursDeCategorisation);
+            const txBrute = transactions_brutes.find(tx => tx.id === txIdEnCoursDeCategorisation) || txNettoyee;
+            txNettoyee.categorie = nouvelleCategorie;
+            txNettoyee.sous_categorie = "Validé par l'utilisateur";
+            txNettoyee.methode = "Utilisateur";
+            displayTransactions(transactionsNettoyees);
+            if (currentBudget.reste_a_vivre_total !== undefined) {
+                 updateDashboardRealTime(txNettoyee);
+            }
+            const motCle = txBrute.libelle.toUpperCase(); 
+            if (motCle) {
+                try {
+                    // On utilise notre NOUVELLE fonction sécurisée
+                    await fetchSecure('/api/learn_rule', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            'mot_cle': motCle,
+                            'categorie': nouvelleCategorie
+                        })
+                    });
+                } catch (error) {
+                    console.error("Erreur, impossible d'enseigner au Cerveau:", error);
+                }
+            }
+            categoryModalBackdrop.classList.remove('visible');
+            txIdEnCoursDeCategorISATION = null;
+        }
+
+        // Connexion des boutons de la modale
+        modalCancelBtn.addEventListener('click', () => {
+            categoryModalBackdrop.classList.remove('visible');
+            txIdEnCoursDeCategorisation = null;
+        });
+        modalCategoryButtons.addEventListener('click', (event) => {
+            if (event.target.classList.contains('category-button')) {
+                const categorieChoisie = event.target.dataset.categorie;
+                onCategorieSelectionnee(categorieChoisie);
+            }
+        });
+        function populerModalCategories() {
+            for (const categorie of CATEGORIES_PREDEFINIES) {
+                if (categorie === "Revenus" || categorie === "Épargne") continue;
+                const btn = document.createElement('button');
+                btn.className = 'category-button';
+                btn.innerText = categorie;
+                btn.dataset.categorie = categorie;
+                modalCategoryButtons.appendChild(btn);
+            }
+        }
+        
+        // Bouton 2 : Créer le budget
+        analyzeBudgetButton.addEventListener('click', async () => {
+            const aVerifier = transactionsNettoyees.find(tx => tx.categorie === 'A_VERIFIER');
+            if (aVerifier) { 
+                alert("Veuillez d'abord catégoriser toutes les transactions !");
+                return;
+            }
+            const objectifEpargne = parseFloat(savingsGoalInput.value) || 0;
+            try {
+                const payload = {
+                    transactions: transactionsNettoyees,
+                    objectif: objectifEpargne
+                };
+                // On utilise notre NOUVELLE fonction sécurisée
+                const budgetProposal = await fetchSecure('/api/create_budget', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                
+                if (budgetProposal) { // On vérifie que l'appel a réussi
+                    budgetProposal.enveloppes_proposees.forEach(env => {
+                        env.montant_restant = env.enveloppe_proposee;
+                    });
+                    currentBudget = budgetProposal; 
+                    displayBudgetProposal(currentBudget);
+                    analyzeBudgetButton.disabled = true;
+                    analyzeBudgetButton.innerText = "Budget Créé";
+                    goalSection.style.display = 'none';
+                }
+            } catch (error) { 
+                console.error("Erreur de l'API Coach:", error);
+            }
+        });
+        
+        // Formulaire d'ajout de dépense
+        newTransactionForm.addEventListener('submit', async (event) => {
+            event.preventDefault(); 
+            const libelle = newTxLibelle.value;
+            let montant = parseFloat(newTxMontant.value);
+            if (!libelle || !montant) {
+                alert("Veuillez remplir les deux champs.");
+                return;
+            }
+            if (montant > 0) { montant = -montant; }
+            const newTxBrute = {
+                'id': 'tx-' + Date.now(),
+                'date': new Date().toISOString().split('T')[0],
+                'libelle': libelle.toUpperCase(),
+                'montant': montant
+            };
+            transactions_brutes.push(newTxBrute); 
+            const newTxNettoyee = await fetchCategorizedTransaction(newTxBrute); // Appelle déjà fetchSecure
+            if (newTxNettoyee) { // Si l'appel n'a pas échoué (401)
+                transactionsNettoyees.push(newTxNettoyee);
+                displayTransactions(transactionsNettoyees); 
+                if (currentBudget.reste_a_vivre_total !== undefined) {
+                     updateDashboardRealTime(newTxNettoyee); 
+                }
+                if (newTxNettoyee.categorie === 'A_VERIFIER') {
+                    alert(`Nouvelle dépense ajoutée ! Veuillez la catégoriser dans la liste.`);
+                }
+            }
+            newTxLibelle.value = '';
+            newTxMontant.value = '';
+        });
+        
+        // --- 7. INITIALISATION ---
+        populerModalCategories();
+        // On n'affiche plus rien au début. On attend le login.
+        
+        
+        /* Fonctions utilitaires complètes (pour être sûr) */
         function displayTransactions(transactions) {
             transactionsList.innerHTML = ''; 
             transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+            
             for (const tx of transactions) {
                 const item = document.createElement('li');
                 item.className = 'transaction-item';
@@ -257,7 +559,6 @@
                 transactionsList.appendChild(item);
             }
         }
-
         function displayBudgetProposal(proposal) {
             resteTotalText.innerText = `${proposal.reste_a_vivre_total.toFixed(2)} €`;
             resteJourText.innerText = `soit ${proposal.reste_a_vivre_jour.toFixed(2)} € par jour`;
@@ -280,17 +581,15 @@
             budgetCoachSection.style.display = 'block';
             newTransactionForm.style.display = 'block'; 
         }
-
         function updateDashboardRealTime(newTransaction) {
             if (newTransaction.montant < 0) {
-                // 1. Mettre à jour le Reste à Dépenser (bloc bleu)
                 currentBudget.reste_a_vivre_total += newTransaction.montant; 
                 const joursRestants = 30 - (new Date().getDate());
                 currentBudget.reste_a_vivre_jour = currentBudget.reste_a_vivre_total / (joursRestants > 0 ? joursRestants : 1);
+                
                 resteTotalText.innerText = `${currentBudget.reste_a_vivre_total.toFixed(2)} €`;
                 resteJourText.innerText = `soit ${currentBudget.reste_a_vivre_jour.toFixed(2)} € par jour`;
 
-                // 2. Mettre à jour l'enveloppe spécifique
                 const categorie = newTransaction.categorie;
                 if (categorie && categorie !== 'A_VERIFIER') {
                     const enveloppe = currentBudget.enveloppes_proposees.find(e => e.categorie === categorie);
@@ -304,160 +603,6 @@
                 }
             }
         }
-
-        // --- 6. LOGIQUE DES BOUTONS ET ACTIONS ---
-        
-        // --- NOUVEAU : Clic sur le bouton de connexion
-        connectBankBtn.addEventListener('click', () => {
-            loginView.style.display = 'none';
-            dashboardView.style.display = 'block';
-            
-            // On lance l'analyse !
-            analyzeButton.click(); 
-        });
-
-        // Bouton 1 : Analyser (maintenant appelé par le bouton de connexion)
-        analyzeButton.addEventListener('click', async () => {
-            transactionsList.innerHTML = '<li>Analyse par l\'IA en cours...</li>';
-            transactionsNettoyees = await Promise.all(transactions_brutes.map(tx => fetchCategorizedTransaction(tx)));
-            displayTransactions(transactionsNettoyees);
-            
-            analyzeButton.disabled = true;
-            analyzeButton.innerText = "Analyse Terminée";
-            
-            goalSection.style.display = 'block'; 
-            analyzeBudgetButton.disabled = false;
-        });
-        
-        // Clic sur "Catégoriser ?" (Modale) (inchangé)
-        transactionsList.addEventListener('click', (event) => {
-            if (event.target.classList.contains('categorize-btn')) {
-                txIdEnCoursDeCategorisation = event.target.dataset.txId;
-                const txNettoyee = transactionsNettoyees.find(tx => tx.id === txIdEnCoursDeCategorisation);
-                modalTxLibelle.innerText = txNettoyee.libelle_nettoye;
-                categoryModalBackdrop.classList.add('visible');
-            }
-        });
-        
-        // Clic sur un bouton de catégorie dans la modale (inchangé)
-        async function onCategorieSelectionnee(nouvelleCategorie) {
-            if (!txIdEnCoursDeCategorisation) return; 
-            const txNettoyee = transactionsNettoyees.find(tx => tx.id === txIdEnCoursDeCategorisation);
-            const txBrute = transactions_brutes.find(tx => tx.id === txIdEnCoursDeCategorisation) || txNettoyee;
-            txNettoyee.categorie = nouvelleCategorie;
-            txNettoyee.sous_categorie = "Validé par l'utilisateur";
-            txNettoyee.methode = "Utilisateur";
-            displayTransactions(transactionsNettoyees);
-            if (currentBudget.reste_a_vivre_total !== undefined) {
-                 updateDashboardRealTime(txNettoyee);
-            }
-            const motCle = txBrute.libelle.toUpperCase(); 
-            if (motCle) {
-                try {
-                    await fetch('/api/learn_rule', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            'mot_cle': motCle,
-                            'categorie': nouvelleCategorie
-                        })
-                    });
-                } catch (error) {
-                    console.error("Erreur, impossible d'enseigner au Cerveau:", error);
-                }
-            }
-            categoryModalBackdrop.classList.remove('visible');
-            txIdEnCoursDeCategorisation = null;
-        }
-
-        // Connexion des boutons de la modale (inchangé)
-        modalCancelBtn.addEventListener('click', () => {
-            categoryModalBackdrop.classList.remove('visible');
-            txIdEnCoursDeCategorisation = null;
-        });
-        modalCategoryButtons.addEventListener('click', (event) => {
-            if (event.target.classList.contains('category-button')) {
-                const categorieChoisie = event.target.dataset.categorie;
-                onCategorieSelectionnee(categorieChoisie);
-            }
-        });
-        function populerModalCategories() {
-            for (const categorie of CATEGORIES_PREDEFINIES) {
-                if (categorie === "Revenus" || categorie === "Épargne") continue;
-                const btn = document.createElement('button');
-                btn.className = 'category-button';
-                btn.innerText = categorie;
-                btn.dataset.categorie = categorie;
-                modalCategoryButtons.appendChild(btn);
-            }
-        }
-        
-        // Bouton 2 : Créer le budget (MODIFIÉ pour URL relative)
-        analyzeBudgetButton.addEventListener('click', async () => {
-            const aVerifier = transactionsNettoyees.find(tx => tx.categorie === 'A_VERIFIER');
-            if (aVerifier) { 
-                alert("Veuillez d'abord catégoriser toutes les transactions !");
-                return;
-            }
-            const objectifEpargne = parseFloat(savingsGoalInput.value) || 0;
-            try {
-                const payload = {
-                    transactions: transactionsNettoyees,
-                    objectif: objectifEpargne
-                };
-                const response = await fetch('/api/create_budget', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const budgetProposal = await response.json();
-                budgetProposal.enveloppes_proposees.forEach(env => {
-                    env.montant_restant = env.enveloppe_proposee;
-                });
-                currentBudget = budgetProposal; 
-                displayBudgetProposal(currentBudget);
-                analyzeBudgetButton.disabled = true;
-                analyzeBudgetButton.innerText = "Budget Créé";
-                goalSection.style.display = 'none';
-            } catch (error) { 
-                console.error("Erreur de l'API Coach:", error);
-            }
-        });
-        
-        // Formulaire d'ajout de dépense (inchangé)
-        newTransactionForm.addEventListener('submit', async (event) => {
-            event.preventDefault(); 
-            const libelle = newTxLibelle.value;
-            let montant = parseFloat(newTxMontant.value);
-            if (!libelle || !montant) {
-                alert("Veuillez remplir les deux champs.");
-                return;
-            }
-            if (montant > 0) { montant = -montant; }
-            const newTxBrute = {
-                'id': 'tx-' + Date.now(),
-                'date': new Date().toISOString().split('T')[0],
-                'libelle': libelle.toUpperCase(),
-                'montant': montant
-            };
-            transactions_brutes.push(newTxBrute); 
-            const newTxNettoyee = await fetchCategorizedTransaction(newTxBrute);
-            transactionsNettoyees.push(newTxNettoyee);
-            displayTransactions(transactionsNettoyees); 
-            if (currentBudget.reste_a_vivre_total !== undefined) {
-                 updateDashboardRealTime(newTxNettoyee); 
-            }
-            if (newTxNettoyee.categorie === 'A_VERIFIER') {
-                alert(`Nouvelle dépense ajoutée ! Veuillez la catégoriser dans la liste.`);
-            }
-            newTxLibelle.value = '';
-            newTxMontant.value = '';
-        });
-        
-        // --- 7. INITIALISATION (MODIFIÉE) ---
-        populerModalCategories();
-        // On n'affiche plus les transactions au début, on attend le clic de connexion.
-        // displayTransactions(transactions_brutes); 
     </script>
 </body>
 </html>
