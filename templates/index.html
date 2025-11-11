@@ -7,16 +7,9 @@
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; display: flex; justify-content: center; }
         
-        /* --- NOUVEAU : Style pour l'écran de connexion --- */
         .login-container {
-            text-align: center;
-            padding: 30px;
-            width: 100%;
-            max-width: 400px;
-            background: #fff;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-            margin-top: 10vh;
+            text-align: center; padding: 30px; width: 100%; max-width: 400px;
+            background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-top: 10vh;
         }
         .login-container h1 { font-size: 28px; color: #333; }
         .login-container p { font-size: 16px; color: #666; margin-bottom: 20px; }
@@ -32,22 +25,9 @@
             border-radius: 10px; cursor: pointer;
         }
         #signup-btn { background-color: #34c759; }
-        #auth-error {
-            color: #ff3b30; margin-top: 15px; font-weight: 600; display: none;
-        }
-        /* Lien pour basculer */
-        .auth-toggle {
-            margin-top: 20px;
-            font-size: 14px;
-            color: #555;
-        }
-        .auth-toggle a {
-            color: #007aff;
-            font-weight: 600;
-            cursor: pointer;
-        }
-        /* --- FIN NOUVEAU CSS --- */
-
+        #auth-error { color: #ff3b30; margin-top: 15px; font-weight: 600; display: none; }
+        .auth-toggle { margin-top: 20px; font-size: 14px; color: #555; }
+        .auth-toggle a { color: #007aff; font-weight: 600; cursor: pointer; }
 
         .app-container { width: 100%; max-width: 400px; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 24px; }
         
@@ -280,30 +260,28 @@
 
         // --- 4. FONCTIONS DE COMMUNICATION (CORRIGÉES) ---
         
-        // La fonction "fetch" sécurisée qui envoie le token
         async function fetchSecure(url, options = {}) {
             const headers = {
                 'Content-Type': 'application/json',
                 ...options.headers,
             };
-
             if (userToken) {
                 headers['Authorization'] = `Bearer ${userToken}`;
             }
 
             // On utilise une URL relative pour que ça marche PARTOUT
+            // (Pas de http://127.0.0.1)
             const response = await fetch(url, { ...options, headers });
 
             if (response.status === 401) {
                 handleLogout(); 
                 return null;
             }
-            
             if (!response.ok) {
-                 console.error("Erreur de connexion au 'Cerveau'", await response.text());
+                 console.error(`Erreur ${response.status} de l'API ${url}:`, await response.text());
                  return null;
             }
-            // On vérifie si la réponse est vide (pour les 'learn_rule' par ex)
+            
             const text = await response.text();
             return text ? JSON.parse(text) : {};
         }
@@ -315,14 +293,17 @@
             });
         }
         
-        // --- 5. FONCTIONS D'AFFICHAGE ---
+        // --- 5. FONCTIONS D'AFFICHAGE (BUG CORRIGÉ) ---
         function displayTransactions(transactions) {
             transactionsList.innerHTML = ''; 
-            // On filtre les 'null' si un fetch a échoué
-            transactions.filter(tx => tx).sort((a, b) => new Date(a.date) - new Date(b.date));
             
-            for (const tx of transactions) {
-                if (!tx) continue; // Sécurité
+            // --- CORRECTION DU BUG D'AFFICHAGE ---
+            // On filtre les 'null' si un fetch a échoué
+            const transactionsValides = transactions.filter(tx => tx);
+            transactionsValides.sort((a, b) => new Date(a.date) - new Date(b.date));
+            // --- FIN CORRECTION ---
+            
+            for (const tx of transactionsValides) {
                 const item = document.createElement('li');
                 item.className = 'transaction-item';
                 const amountClass = tx.montant > 0 ? 'positive' : 'negative';
@@ -366,7 +347,7 @@
         }
 
         function updateDashboardRealTime(newTransaction) {
-            if (newTransaction.montant < 0) {
+            if (newTransaction && newTransaction.montant < 0) { // Sécurité
                 currentBudget.reste_a_vivre_total += newTransaction.montant; 
                 const joursRestants = 30 - (new Date().getDate());
                 currentBudget.reste_a_vivre_jour = currentBudget.reste_a_vivre_total / (joursRestants > 0 ? joursRestants : 1);
@@ -413,8 +394,12 @@
                 return;
             }
             
+            // --- AJOUT DU LOADING STATE ---
+            signupBtn.disabled = true;
+            signupBtn.innerText = "Création...";
+            authError.style.display = 'none';
+
             try {
-                // On n'utilise PAS fetchSecure, car on n'a pas de token
                 const response = await fetch('/api/signup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -423,7 +408,8 @@
                 
                 if (response.status === 201) {
                     authError.innerText = "Compte créé ! Vous pouvez vous connecter.";
-                    showLoginBtn.click(); // On bascule vers le login
+                    authError.style.display = 'block';
+                    showLoginBtn.click();
                 } else {
                     const error = await response.json();
                     authError.innerText = error.msg || "Erreur.";
@@ -432,6 +418,10 @@
             } catch (e) {
                 authError.innerText = "Erreur de connexion au serveur.";
                 authError.style.display = 'block';
+            } finally {
+                // On réactive le bouton
+                signupBtn.disabled = false;
+                signupBtn.innerText = "S'inscrire";
             }
         });
 
@@ -444,8 +434,12 @@
                 return;
             }
             
+            // --- AJOUT DU LOADING STATE ---
+            loginBtn.disabled = true;
+            loginBtn.innerText = "Connexion...";
+            authError.style.display = 'none';
+
             try {
-                // On n'utilise PAS fetchSecure, car on n'a pas de token
                 const response = await fetch('/api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -454,7 +448,7 @@
                 
                 if (response.ok) {
                     const data = await response.json();
-                    userToken = data.access_token; // <-- ON SAUVEGARDE LE TOKEN !
+                    userToken = data.access_token;
                     
                     loginView.style.display = 'none';
                     dashboardView.style.display = 'block';
@@ -470,6 +464,10 @@
             } catch (e) {
                 authError.innerText = "Erreur de connexion au serveur.";
                 authError.style.display = 'block';
+            } finally {
+                // On réactive le bouton
+                loginBtn.disabled = false;
+                loginBtn.innerText = "Se Connecter";
             }
         });
         
@@ -494,13 +492,13 @@
             budgetCoachSection.style.display = 'none';
             dashboardPrincipal.style.display = 'none';
             newTransactionForm.style.display = 'none';
+            transactionsList.innerHTML = ''; // Vider la liste
         }
 
         // Bouton 1 : Analyser
         analyzeButton.addEventListener('click', async () => {
             transactionsList.innerHTML = '<li>Analyse par l\'IA en cours...</li>';
             
-            // Le Promise.all qui appelle fetchCategorizedTransaction
             transactionsNettoyees = await Promise.all(transactions_brutes.map(tx => fetchCategorizedTransaction(tx)));
             
             displayTransactions(transactionsNettoyees);
