@@ -6,14 +6,9 @@ const CATEGORIES_PREDEFINIES = [
     "Shopping", "Santé", "Transport", "Épargne", "Autres"
 ];
 
-// --- CORRECTION : ON SUPPRIME LES DONNÉES BRUTES ---
-// Un nouvel utilisateur commence à zéro.
-// const transactions_brutes = [ ... ]; (SUPPRIMÉ)
-
 // --- 2. ÉLÉMENTS HTML ---
 const loginView = document.getElementById('login-view');
 const dashboardView = document.getElementById('dashboard-view');
-// ... (tous les autres const... C'est identique)
 const loginForm = document.getElementById('login-form');
 const signupForm = document.getElementById('signup-form');
 const showSignupBtn = document.getElementById('show-signup');
@@ -47,16 +42,14 @@ const modalTxLibelle = document.getElementById('modal-tx-libelle');
 const modalCategoryButtons = document.getElementById('modal-category-buttons');
 const modalCancelBtn = document.getElementById('modal-cancel-btn');
 
-
 // --- 3. MÉMOIRE LOCALE ---
 let userToken = null; 
-let transactionsNettoyees = []; // Commence vide !
+let transactionsNettoyees = [];
 let currentBudget = {}; 
 let txIdEnCoursDeCategorisation = null; 
 
 // --- 4. FONCTIONS DE COMMUNICATION ---
 async function fetchSecure(url, options = {}) {
-    // ... (fonction identique)
     const headers = {
         'Content-Type': 'application/json',
         ...options.headers,
@@ -77,6 +70,24 @@ async function fetchSecure(url, options = {}) {
     return text ? JSON.parse(text) : {};
 }
 
+// 🆕 Charger les transactions depuis le serveur
+async function loadTransactions() {
+    const data = await fetchSecure('/api/transactions', { method: 'GET' });
+    if (data) {
+        transactionsNettoyees = data;
+        displayTransactions(transactionsNettoyees);
+    }
+}
+
+// 🆕 Ajouter une transaction sur le serveur
+async function addTransaction(transaction) {
+    const data = await fetchSecure('/api/transactions', {
+        method: 'POST',
+        body: JSON.stringify(transaction)
+    });
+    return data;
+}
+
 async function fetchCategorizedTransaction(transaction) {
     return await fetchSecure('/api/categorize', {
         method: 'POST',
@@ -86,16 +97,14 @@ async function fetchCategorizedTransaction(transaction) {
 
 // --- 5. FONCTIONS D'AFFICHAGE ---
 function displayTransactions(transactions) {
-    // ... (fonction identique)
     transactionsList.innerHTML = ''; 
     const transactionsValides = transactions.filter(tx => tx);
     transactionsValides.sort((a, b) => new Date(a.date) - new Date(b.date));
     
-    // --- CORRECTION : Message si la liste est vide ---
     if (transactionsValides.length === 0) {
-        transactionsList.innerHTML = '<li>Vous n\'avez encore aucune dépense.</li>';
+        transactionsList.innerHTML = '<li>Vous n\'avez encore aucune dépense. Utilisez le simulateur ci-dessous pour en ajouter !</li>';
+        return;
     }
-    // --- FIN CORRECTION ---
     
     for (const tx of transactionsValides) {
         const item = document.createElement('li');
@@ -118,7 +127,6 @@ function displayTransactions(transactions) {
 }
 
 function displayBudgetProposal(proposal) {
-    // ... (fonction identique)
     resteTotalText.innerText = `${proposal.reste_a_vivre_total.toFixed(2)} €`;
     resteJourText.innerText = `soit ${proposal.reste_a_vivre_jour.toFixed(2)} € par jour`;
     dashboardPrincipal.style.display = 'block';
@@ -141,21 +149,37 @@ function displayBudgetProposal(proposal) {
 }
 
 function updateDashboardRealTime(newTransaction) {
-    // ... (fonction identique)
     if (newTransaction && newTransaction.montant < 0) {
-        // ... (logique identique)
+        const categorie = newTransaction.categorie;
+        const montant = Math.abs(newTransaction.montant);
+        
+        const enveloppe = currentBudget.enveloppes_proposees.find(env => env.categorie === categorie);
+        if (enveloppe) {
+            enveloppe.montant_restant -= montant;
+            const envElement = document.getElementById(`env-restant-${categorie}`);
+            if (envElement) {
+                envElement.innerText = enveloppe.montant_restant.toFixed(2);
+            }
+        }
+        
+        currentBudget.reste_a_vivre_total -= montant;
+        currentBudget.reste_a_vivre_jour = currentBudget.reste_a_vivre_total / 30;
+        
+        resteTotalText.innerText = `${currentBudget.reste_a_vivre_total.toFixed(2)} €`;
+        resteJourText.innerText = `soit ${currentBudget.reste_a_vivre_jour.toFixed(2)} € par jour`;
     }
 }
 
 // --- 6. LOGIQUE DES BOUTONS ET ACTIONS ---
 
-// --- Logique d'authentification (Corrigée) ---
+// Logique d'authentification
 showSignupBtn.addEventListener('click', (e) => {
     e.preventDefault();
     loginForm.style.display = 'none';
     signupForm.style.display = 'block';
     authError.style.display = 'none';
 });
+
 showLoginBtn.addEventListener('click', (e) => {
     e.preventDefault();
     loginForm.style.display = 'block';
@@ -164,7 +188,6 @@ showLoginBtn.addEventListener('click', (e) => {
 });
 
 signupBtn.addEventListener('click', async () => {
-    // ... (fonction identique)
     const email = signupEmail.value;
     const password = signupPassword.value;
     if (!email || !password) {
@@ -200,7 +223,6 @@ signupBtn.addEventListener('click', async () => {
 });
 
 loginBtn.addEventListener('click', async () => {
-    // ... (fonction identique)
     const email = loginEmail.value;
     const password = loginPassword.value;
     if (!email || !password) {
@@ -225,15 +247,14 @@ loginBtn.addEventListener('click', async () => {
             loginView.style.display = 'none';
             dashboardView.style.display = 'block';
             
-            // --- CORRECTION : On ne clique plus sur un bouton qui n'existe plus ---
-            // analyzeButton.click(); (SUPPRIMÉ)
+            // 🆕 Charger les transactions de l'utilisateur
+            await loadTransactions();
             
-            // --- CORRECTION : On affiche directement le bon état ---
-            analyzeSection.style.display = 'none'; // On cache le bouton d'analyse
-            goalSection.style.display = 'block'; // On montre l'objectif
-            budgetButtonGroup.style.display = 'flex'; // On montre le bouton "Créer Budget"
-            newTransactionForm.style.display = 'block'; // On montre le simulateur
-            displayTransactions([]); // On affiche la liste (vide)
+            // Afficher l'interface appropriée
+            analyzeSection.style.display = 'none';
+            goalSection.style.display = 'block';
+            budgetButtonGroup.style.display = 'flex';
+            newTransactionForm.style.display = 'block';
             
         } else {
             const error = await response.json();
@@ -250,7 +271,6 @@ loginBtn.addEventListener('click', async () => {
 });
         
 function handleLogout() {
-    // ... (fonction identique)
     userToken = null;
     transactionsNettoyees = [];
     currentBudget = {};
@@ -267,12 +287,10 @@ function handleLogout() {
     transactionsList.innerHTML = '';
 }
 
-// Bouton 1 : Analyser (Maintenant Inutilisé)
-// analyzeButton.addEventListener('click', ... ); (SUPPRIMÉ)
-        
+logoutBtn.addEventListener('click', handleLogout);
+
 // Clic sur "Catégoriser ?" (Modale)
 transactionsList.addEventListener('click', (event) => {
-    // ... (fonction identique)
     if (event.target.classList.contains('categorize-btn')) {
         txIdEnCoursDeCategorisation = event.target.dataset.txId;
         const txNettoyee = transactionsNettoyees.find(tx => tx.id === txIdEnCoursDeCategorisation);
@@ -283,21 +301,25 @@ transactionsList.addEventListener('click', (event) => {
         
 // Clic sur un bouton de catégorie dans la modale
 async function onCategorieSelectionnee(nouvelleCategorie) {
-    // ... (fonction identique)
     if (!txIdEnCoursDeCategorisation) return; 
-    const txNettoyee = transactionsNettoyees.find(tx => tx.id === txIdEnCoursDeCategorisation);
-    const txBrute = transactions_brutes.find(tx => tx.id === txIdEnCoursDeCategorISATION) || txNettoyee; // Oups, tx_brutes n'existe plus
-    const txBruteCorrigee = transactionsNettoyees.find(tx => tx.id === txIdEnCoursDeCategorisation); // On utilise la liste nettoyée
     
+    const txNettoyee = transactionsNettoyees.find(tx => tx.id === txIdEnCoursDeCategorisation);
+    
+    // 🔧 CORRECTION : On utilise le libellé original de la transaction
+    const motCle = txNettoyee.libelle.toUpperCase();
+    
+    // Mise à jour locale
     txNettoyee.categorie = nouvelleCategorie;
     txNettoyee.sous_categorie = "Validé par l'utilisateur";
     txNettoyee.methode = "Utilisateur";
+    
     displayTransactions(transactionsNettoyees);
+    
     if (currentBudget.reste_a_vivre_total !== undefined) {
          updateDashboardRealTime(txNettoyee);
     }
     
-    const motCle = txBruteCorrigee.libelle.toUpperCase(); // On utilise le libellé brut (ou nettoyé, c'est ok)
+    // Apprentissage de la règle
     if (motCle) {
         try {
             await fetchSecure('/api/learn_rule', {
@@ -311,18 +333,36 @@ async function onCategorieSelectionnee(nouvelleCategorie) {
             console.error("Erreur, impossible d'enseigner au Cerveau:", error);
         }
     }
+    
     categoryModalBackdrop.classList.remove('visible');
     txIdEnCoursDeCategorisation = null;
 }
 
 // Connexion des boutons de la modale
-modalCancelBtn.addEventListener('click', () => { /* ... (identique) ... */ });
-modalCategoryButtons.addEventListener('click', (event) => { /* ... (identique) ... */ });
-function populerModalCategories() { /* ... (identique) ... */ }
+modalCancelBtn.addEventListener('click', () => { 
+    categoryModalBackdrop.classList.remove('visible');
+    txIdEnCoursDeCategorisation = null;
+});
+
+modalCategoryButtons.addEventListener('click', (event) => { 
+    if (event.target.classList.contains('category-button')) {
+        onCategorieSelectionnee(event.target.dataset.category);
+    }
+});
+
+function populerModalCategories() { 
+    modalCategoryButtons.innerHTML = '';
+    for (const cat of CATEGORIES_PREDEFINIES) {
+        const btn = document.createElement('button');
+        btn.className = 'category-button';
+        btn.dataset.category = cat;
+        btn.innerText = cat;
+        modalCategoryButtons.appendChild(btn);
+    }
+}
         
-// Bouton 2 : Créer le budget
+// Bouton : Créer le budget
 analyzeBudgetButton.addEventListener('click', async () => {
-    // ... (fonction identique)
     const aVerifier = transactionsNettoyees.find(tx => tx.categorie === 'A_VERIFIER');
     if (aVerifier) { 
         alert("Veuillez d'abord catégoriser toutes les transactions !");
@@ -356,40 +396,46 @@ analyzeBudgetButton.addEventListener('click', async () => {
         
 // Formulaire d'ajout de dépense
 newTransactionForm.addEventListener('submit', async (event) => {
-    // ... (fonction identique)
     event.preventDefault(); 
     const libelle = newTxLibelle.value;
     let montant = parseFloat(newTxMontant.value);
+    
     if (!libelle || !montant) {
         alert("Veuillez remplir les deux champs.");
         return;
     }
-    if (montant > 0) { montant = -montant; }
     
-    // --- CORRECTION : On n'ajoute plus à "transactions_brutes" ---
+    if (montant > 0) { 
+        montant = -montant; 
+    }
+    
+    // 🆕 Créer la nouvelle transaction
     const newTxBrute = {
-        'id': 'tx-' + Date.now(),
         'date': new Date().toISOString().split('T')[0],
         'libelle': libelle.toUpperCase(),
         'montant': montant
     };
-    // transactions_brutes.push(newTxBrute); (SUPPRIMÉ)
     
-    const newTxNettoyee = await fetchCategorizedTransaction(newTxBrute);
+    // 🆕 L'envoyer au serveur pour qu'elle soit sauvegardée
+    const newTxNettoyee = await addTransaction(newTxBrute);
+    
     if (newTxNettoyee) {
+        // Ajouter à notre liste locale
         transactionsNettoyees.push(newTxNettoyee);
         displayTransactions(transactionsNettoyees); 
+        
         if (currentBudget.reste_a_vivre_total !== undefined) {
              updateDashboardRealTime(newTxNettoyee); 
         }
+        
         if (newTxNettoyee.categorie === 'A_VERIFIER') {
             alert(`Nouvelle dépense ajoutée ! Veuillez la catégoriser dans la liste.`);
         }
     }
+    
     newTxLibelle.value = '';
     newTxMontant.value = '';
 });
         
 // --- 7. INITIALISATION ---
 populerModalCategories();
-// On n'affiche plus rien au début.

@@ -20,7 +20,7 @@ app = Flask(__name__)
 CORS(app)
 
 # --- CONFIGURATION DE LA SÉCURITÉ ---
-app.config["JWT_SECRET_KEY"] = "ton-super-secret-jwt-change-moi" # Change ça un jour
+app.config["JWT_SECRET_KEY"] = "ton-super-secret-jwt-change-moi"
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
 
@@ -49,6 +49,7 @@ def init_db():
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        # Table utilisateurs
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS utilisateurs (
             id SERIAL PRIMARY KEY,
@@ -57,6 +58,7 @@ def init_db():
         )
         """)
         
+        # Table règles générales
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS regles_generales (
             id SERIAL PRIMARY KEY,
@@ -67,6 +69,7 @@ def init_db():
         )
         """)
         
+        # Table règles personnelles
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS regles_personnelles (
             id SERIAL PRIMARY KEY,
@@ -80,10 +83,27 @@ def init_db():
         )
         """)
         
+        # 🆕 NOUVELLE TABLE : Transactions utilisateur
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS transactions (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            date TEXT NOT NULL,
+            libelle TEXT NOT NULL,
+            libelle_nettoye TEXT NOT NULL,
+            montant REAL NOT NULL,
+            categorie TEXT NOT NULL,
+            sous_categorie TEXT NOT NULL,
+            methode TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES utilisateurs (id)
+        )
+        """)
+        
         conn.commit()
         cursor.close()
         conn.close()
-        print("Base de données PostgreSQL (3 tables) initialisée.")
+        print("Base de données PostgreSQL (4 tables) initialisée avec succès !")
     except Exception as e:
         print(f"ERREUR LORS DE L'INIT DB: {e}")
 
@@ -119,13 +139,11 @@ def seed_database():
     except Exception as e:
         print(f"Erreur lors du 'seeding' de la BDD : {e}")
 
-# --- CORRECTION : ON APPELLE LES FONCTIONS AU NIVEAU GLOBAL ---
+# Initialisation au démarrage
 init_db()
 seed_database()
-# --- FIN CORRECTION ---
     
-# --- 3. Logique Métier (Inchangée) ---
-# ... (toutes les fonctions : sauvegarder_regle_generale, sauvegarder_regle_personnelle, extraire_json_de_reponse, appel_llm_ia, classifier_transaction)
+# --- 3. Logique Métier ---
 def sauvegarder_regle_generale(mot_cle, libelle_nettoye, categorie, sous_categorie):
     try:
         conn = get_db_connection()
@@ -198,7 +216,7 @@ def appel_llm_ia(transaction):
     2.  Choisis la "categorie" la plus pertinente parmi cette liste : {json.dumps(categories_valides)}
     RÈGLES CRITIQUES :
     -   Si tu ne peux pas deviner, utilise la catégorie "A_VERIFIER".
-    -   Ta réponse DOIT commencer par {{" et finir par }}".
+    -   Ta réponse DOIT commencer par {{"et finir par }}".
     -   Ne réponds RIEN d'autre.
     -   SEULEMENT l'objet JSON.
     """
@@ -281,14 +299,13 @@ def classifier_transaction(transaction, user_id):
         'methode': resultat_llm['methode']
     }
 
-# --- 4. Routes de l'API (Inchangées) ---
+# --- 4. Routes de l'API ---
 @app.route('/')
 def home():
     return render_template('index.html')
 
 @app.route('/api/signup', methods=['POST'])
 def api_signup():
-    # ... (code identique)
     data = request.json
     email = data.get('email')
     password = data.get('password')
@@ -312,7 +329,6 @@ def api_signup():
 
 @app.route('/api/login', methods=['POST'])
 def api_login():
-    # ... (code identique)
     data = request.json
     email = data.get('email')
     password = data.get('password')
@@ -331,6 +347,84 @@ def api_login():
     else:
         return jsonify({"msg": "Email ou mot de passe incorrect"}), 401
 
+# 🆕 NOUVELLE ROUTE : Récupérer les transactions d'un utilisateur
+@app.route('/api/transactions', methods=['GET'])
+@jwt_required()
+def api_get_transactions():
+    user_id = get_jwt_identity()
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, date, libelle, libelle_nettoye, montant, categorie, sous_categorie, methode
+            FROM transactions
+            WHERE user_id = %s
+            ORDER BY date ASC
+        """, (user_id,))
+        
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        transactions = []
+        for row in rows:
+            transactions.append({
+                'id': str(row[0]),
+                'date': row[1],
+                'libelle': row[2],
+                'libelle_nettoye': row[3],
+                'montant': row[4],
+                'categorie': row[5],
+                'sous_categorie': row[6],
+                'methode': row[7]
+            })
+        
+        return jsonify(transactions)
+    except Exception as e:
+        print(f"Erreur lors de la récupération des transactions : {e}")
+        return jsonify({"msg": "Erreur serveur"}), 500
+
+# 🆕 NOUVELLE ROUTE : Ajouter une transaction
+@app.route('/api/transactions', methods=['POST'])
+@jwt_required()
+def api_add_transaction():
+    user_id = get_jwt_identity()
+    transaction_brute = request.json
+    
+    # Classifier la transaction
+    transaction_nettoyee = classifier_transaction(transaction_brute, user_id)
+    
+    # Sauvegarder dans la BDD
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO transactions (user_id, date, libelle, libelle_nettoye, montant, categorie, sous_categorie, methode)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            user_id,
+            transaction_nettoyee['date'],
+            transaction_nettoyee['libelle'],
+            transaction_nettoyee['libelle_nettoye'],
+            transaction_nettoyee['montant'],
+            transaction_nettoyee['categorie'],
+            transaction_nettoyee['sous_categorie'],
+            transaction_nettoyee['methode']
+        ))
+        
+        new_id = cursor.fetchone()[0]
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        transaction_nettoyee['id'] = str(new_id)
+        return jsonify(transaction_nettoyee), 201
+        
+    except Exception as e:
+        print(f"Erreur lors de l'ajout de la transaction : {e}")
+        return jsonify({"msg": "Erreur serveur"}), 500
+
 @app.route('/api/categorize', methods=['POST'])
 @jwt_required() 
 def api_categorize():
@@ -342,44 +436,75 @@ def api_categorize():
 @app.route('/api/create_budget', methods=['POST'])
 @jwt_required() 
 def api_create_budget():
-    data = request.json; transactions = data.get('transactions', []); objectif_epargne = data.get('objectif', 0)
-    revenus = 0; charges_fixes = 0; depenses_variables_observees = {}; total_depenses_variables = 0
-    # On boucle sur la VRAIE liste de transactions de l'utilisateur
+    data = request.json
+    transactions = data.get('transactions', [])
+    objectif_epargne = data.get('objectif', 0)
+    revenus = 0
+    charges_fixes = 0
+    depenses_variables_observees = {}
+    total_depenses_variables = 0
+    
     for tx in transactions:
-        categorie = tx.get('categorie'); montant = tx.get('montant', 0)
-        if categorie == 'Revenus': revenus += montant
-        elif categorie == 'Charges Fixes': charges_fixes += montant
+        categorie = tx.get('categorie')
+        montant = tx.get('montant', 0)
+        if categorie == 'Revenus': 
+            revenus += montant
+        elif categorie == 'Charges Fixes': 
+            charges_fixes += montant
         elif categorie not in ['A_VERIFIER', 'Revenus', 'Charges Fixes'] and montant < 0:
-            if categorie not in depenses_variables_observees: depenses_variables_observees[categorie] = 0
+            if categorie not in depenses_variables_observees: 
+                depenses_variables_observees[categorie] = 0
             depenses_variables_observees[categorie] += montant
             total_depenses_variables += montant
     
-    # ... (le reste de la logique de budget est identique)
-    charges_fixes_abs = round(abs(charges_fixes), 2); revenus_observes = round(revenus, 2)
+    charges_fixes_abs = round(abs(charges_fixes), 2)
+    revenus_observes = round(revenus, 2)
     total_depenses_variables_abs = round(abs(total_depenses_variables), 2)
     budget_variable_total_disponible = revenus_observes - charges_fixes_abs - objectif_epargne
     enveloppes_proposees = []
+    
     if total_depenses_variables_abs > 0:
         for categorie, total_depense in depenses_variables_observees.items():
             pourcentage = abs(total_depense) / total_depenses_variables_abs
             montant_propose = budget_variable_total_disponible * pourcentage
             montant_propose_arrondi = math.floor(montant_propose / 5) * 5
-            enveloppes_proposees.append({'categorie': categorie, 'depense_observee': round(abs(total_depense), 2), 'enveloppe_proposee': montant_propose_arrondi})
+            enveloppes_proposees.append({
+                'categorie': categorie, 
+                'depense_observee': round(abs(total_depense), 2), 
+                'enveloppe_proposee': montant_propose_arrondi
+            })
+    
     total_alloue_enveloppes = sum(env['enveloppe_proposee'] for env in enveloppes_proposees)
     bonus_non_alloue = budget_variable_total_disponible - total_alloue_enveloppes
+    
     if bonus_non_alloue > 0:
-        enveloppes_proposees.append({'categorie': 'Bonus (Non Alloué)', 'depense_observee': 0, 'enveloppe_proposee': round(bonus_non_alloue, 2)})
+        enveloppes_proposees.append({
+            'categorie': 'Bonus (Non Alloué)', 
+            'depense_observee': 0, 
+            'enveloppe_proposee': round(bonus_non_alloue, 2)
+        })
+    
     reste_a_vivre_total = budget_variable_total_disponible
     reste_a_vivre_jour = reste_a_vivre_total / 30
-    message_ia = f"OK Julien ! Pour atteindre votre objectif de {objectif_epargne}€ d'épargne (sur {revenus_observes}€ de revenus), il nous reste {reste_a_vivre_total}€ à répartir. Je vous propose les enveloppes suivantes :"
-    reponse_coach = { 'revenus_observes': revenus_observes, 'fixes_observes': charges_fixes_abs, 'enveloppes_proposees': enveloppes_proposees, 'message_ia': message_ia, 'reste_a_vivre_total': round(reste_a_vivre_total, 2), 'reste_a_vivre_jour': round(reste_a_vivre_jour, 2) }
+    message_ia = f"OK ! Pour atteindre votre objectif de {objectif_epargne}€ d'épargne (sur {revenus_observes}€ de revenus), il nous reste {reste_a_vivre_total}€ à répartir. Je vous propose les enveloppes suivantes :"
+    
+    reponse_coach = { 
+        'revenus_observes': revenus_observes, 
+        'fixes_observes': charges_fixes_abs, 
+        'enveloppes_proposees': enveloppes_proposees, 
+        'message_ia': message_ia, 
+        'reste_a_vivre_total': round(reste_a_vivre_total, 2), 
+        'reste_a_vivre_jour': round(reste_a_vivre_jour, 2) 
+    }
     return jsonify(reponse_coach)
 
 @app.route('/api/learn_rule', methods=['POST'])
 @jwt_required() 
 def api_learn_rule():
     user_id = get_jwt_identity()
-    data = request.json; mot_cle = data.get('mot_cle'); categorie = data.get('categorie')
+    data = request.json
+    mot_cle = data.get('mot_cle')
+    categorie = data.get('categorie')
     if not mot_cle or not categorie:
         return jsonify({'status': 'erreur', 'message': 'Données manquantes'}), 400
     
@@ -394,6 +519,3 @@ def api_learn_rule():
         return jsonify({'status': 'ok', 'message': f"Règle PERSONNELLE '{mot_cle.upper()}' sauvegardée."})
     else:
         return jsonify({'status': 'erreur', 'message': 'Erreur BDD'}), 500
-
-# --- 5. Lancement (On n'a plus besoin du 'if __name__ ...') ---
-# Gunicorn va juste importer le fichier et trouver l'objet 'app'.
