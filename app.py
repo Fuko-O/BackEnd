@@ -43,7 +43,7 @@ def get_db_connection():
     conn = psycopg2.connect(DATABASE_URL)
     return conn
 
-# --- 2. Initialisation BDD (CORRIGÉE) ---
+# --- 2. Initialisation BDD ---
 def init_db():
     try:
         conn = get_db_connection()
@@ -90,7 +90,6 @@ def init_db():
     except Exception as e:
         print(f"ERREUR LORS DE L'INIT DB: {e}")
 
-# --- NOUVEAU : On "remplit" la BDD avec nos règles de base ---
 def seed_database():
     """Remplit la table regles_generales avec nos règles de base si elle est vide."""
     base_rules = {
@@ -123,13 +122,14 @@ def seed_database():
     except Exception as e:
         print(f"Erreur lors du 'seeding' de la BDD : {e}")
 
-# --- CORRECTION : ON APPELLE LES FONCTIONS AU DÉMARRAGE ! ---
+# --- CORRECTION : ON APPELLE LES FONCTIONS AU NIVEAU GLOBAL ---
+# Gunicorn va exécuter cela lors de l'import, avant de lancer le serveur.
 init_db()
 seed_database()
 # --- FIN CORRECTION ---
     
 
-# --- 3. Logique Métier ---
+# --- 3. Logique Métier (Inchangée) ---
 
 def sauvegarder_regle_generale(mot_cle, libelle_nettoye, categorie, sous_categorie):
     try:
@@ -405,4 +405,4 @@ def api_learn_rule():
 
 # --- 5. Lancement (On n'a plus besoin du 'if __name__ ...') ---
 # Gunicorn va juste importer le fichier et trouver l'objet 'app'.
-# L'appel à init_db() et seed_database() est maintenant aux lignes 70-71.
+# L'appel à init_db() et seed_database() est maintenant aux lignes 73-74.
