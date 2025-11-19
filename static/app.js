@@ -251,6 +251,19 @@ loginBtn.addEventListener('click', async () => {
             
             // 🆕 Charger les transactions de l'utilisateur
             await loadTransactions();
+
+            // 🆕 Charger le budget existant s'il y en a un
+            const savedBudget = await fetchSecure('/api/budget', { method: 'GET' });
+            if (savedBudget) {
+                currentBudget = savedBudget;
+                displayBudgetProposal(currentBudget);
+                analyzeBudgetButton.disabled = true;
+                analyzeBudgetButton.innerText = "Budget Actif";
+                goalSection.style.display = 'none';
+            } else {
+                // Sinon, on affiche l'interface pour en créer un
+                goalSection.style.display = 'block';
+            }
             
             // Afficher l'interface appropriée
             analyzeSection.style.display = 'none';
@@ -302,38 +315,42 @@ transactionsList.addEventListener('click', (event) => {
 });
         
 // Clic sur un bouton de catégorie dans la modale
+// Dans static/app.js, remplace toute la fonction onCategorieSelectionnee par :
+
 async function onCategorieSelectionnee(nouvelleCategorie) {
     if (!txIdEnCoursDeCategorisation) return; 
     
     const txNettoyee = transactionsNettoyees.find(tx => tx.id === txIdEnCoursDeCategorisation);
+    const motCle = txNettoyee.libelle.toUpperCase(); // On garde le mot clé pour l'apprentissage
     
-    // 🔧 CORRECTION : On utilise le libellé original de la transaction
-    const motCle = txNettoyee.libelle.toUpperCase();
-    
-    // Mise à jour locale
+    // 1. Mise à jour VISUELLE (immédiate)
     txNettoyee.categorie = nouvelleCategorie;
     txNettoyee.sous_categorie = "Validé par l'utilisateur";
     txNettoyee.methode = "Utilisateur";
-    
     displayTransactions(transactionsNettoyees);
     
     if (currentBudget.reste_a_vivre_total !== undefined) {
          updateDashboardRealTime(txNettoyee);
     }
     
-    // Apprentissage de la règle
+    // 2. Mise à jour BASE DE DONNÉES (La transaction précise) -> C'est ça qui manquait !
+    try {
+        await fetchSecure(`/api/transactions/${txNettoyee.id}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+                categorie: nouvelleCategorie
+            })
+        });
+    } catch (e) { console.error("Erreur sauvegarde transaction", e); }
+
+    // 3. Apprentissage (La règle générale)
     if (motCle) {
         try {
             await fetchSecure('/api/learn_rule', {
                 method: 'POST',
-                body: JSON.stringify({
-                    'mot_cle': motCle,
-                    'categorie': nouvelleCategorie
-                })
+                body: JSON.stringify({ 'mot_cle': motCle, 'categorie': nouvelleCategorie })
             });
-        } catch (error) {
-            console.error("Erreur, impossible d'enseigner au Cerveau:", error);
-        }
+        } catch (error) { console.error("Erreur apprentissage", error); }
     }
     
     categoryModalBackdrop.classList.remove('visible');
@@ -387,6 +404,12 @@ analyzeBudgetButton.addEventListener('click', async () => {
             });
             currentBudget = budgetProposal; 
             displayBudgetProposal(currentBudget);
+            // 🆕 SAUVEGARDER LE BUDGET EN BDD
+            await fetchSecure('/api/budget', {
+                method: 'POST',
+                body: JSON.stringify(currentBudget)
+            });
+
             analyzeBudgetButton.disabled = true;
             analyzeBudgetButton.innerText = "Budget Créé";
             goalSection.style.display = 'none';

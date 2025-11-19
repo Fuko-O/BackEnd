@@ -99,6 +99,17 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES utilisateurs (id)
         )
         """)
+
+        # 🆕 TABLE BUDGET (Pour ne pas perdre son objectif)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS budgets (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL UNIQUE,
+            data TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES utilisateurs (id)
+        )
+        """)
         
         conn.commit()
         cursor.close()
@@ -519,3 +530,59 @@ def api_learn_rule():
         return jsonify({'status': 'ok', 'message': f"Règle PERSONNELLE '{mot_cle.upper()}' sauvegardée."})
     else:
         return jsonify({'status': 'erreur', 'message': 'Erreur BDD'}), 500
+
+# 🆕 ROUTE : Mettre à jour une transaction spécifique (Fixe le bug de la boucle)
+@app.route('/api/transactions/<int:transaction_id>', methods=['PUT'])
+@jwt_required()
+def api_update_transaction(transaction_id):
+    user_id = get_jwt_identity()
+    data = request.json
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        # On vérifie que la transaction appartient bien à l'utilisateur
+        cursor.execute("""
+            UPDATE transactions 
+            SET categorie = %s, sous_categorie = %s, methode = %s
+            WHERE id = %s AND user_id = %s
+        """, (data['categorie'], "Validé (Utilisateur)", "Utilisateur", transaction_id, user_id))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({'status': 'ok'})
+    except Exception as e:
+        print(f"Erreur update transaction: {e}")
+        return jsonify({"msg": "Erreur serveur"}), 500
+
+# 🆕 ROUTE : Gérer le budget (Sauvegarde et Lecture)
+@app.route('/api/budget', methods=['GET', 'POST'])
+@jwt_required()
+def api_budget_manager():
+    user_id = get_jwt_identity()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    if request.method == 'POST':
+        # Sauvegarder le budget
+        budget_data = json.dumps(request.json)
+        try:
+            cursor.execute("""
+                INSERT INTO budgets (user_id, data) VALUES (%s, %s)
+                ON CONFLICT (user_id) DO UPDATE SET data = EXCLUDED.data, updated_at = CURRENT_TIMESTAMP
+            """, (user_id, budget_data))
+            conn.commit()
+            return jsonify({'status': 'saved'})
+        except Exception as e:
+            return jsonify({"msg": str(e)}), 500
+    
+    elif request.method == 'GET':
+        # Lire le budget
+        cursor.execute("SELECT data FROM budgets WHERE user_id = %s", (user_id,))
+        row = cursor.fetchone()
+        if row:
+            return jsonify(json.loads(row[0]))
+        else:
+            return jsonify(None) # Pas de budget encore
+    
+    cursor.close()
+    conn.close()      

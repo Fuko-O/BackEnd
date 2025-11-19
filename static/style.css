@@ -265,3 +265,13 @@ h3 {
     gap: 10px;
     margin: 20px 0;
 }
+
+/* Correction bouton logout */
+#logout-btn {
+    width: auto !important; /* Force la largeur automatique */
+    display: inline-block;
+    margin-top: 0;
+    padding: 6px 12px;
+    font-size: 12px;
+    vertical-align: middle;
+}
