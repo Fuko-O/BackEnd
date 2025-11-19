@@ -117,10 +117,12 @@ function displayTransactions(transactions) {
             categoryHtml = `<div class="transaction-category">${tx.categorie || '...'} > ${tx.sous_categorie || '...'}</div>`;
         }
         item.innerHTML = `
+            <div class="transaction-info">
+                <div class="transaction-libelle">${tx.libelle_nettoye || tx.libelle}</div>
+                <div class="transaction-details">${tx.date}</div>
+                ${categoryHtml} 
+             </div>
             <span class="transaction-amount ${amountClass}">${tx.montant.toFixed(2)} €</span>
-            <div class="transaction-libelle">${tx.libelle_nettoye || tx.libelle}</div>
-            ${categoryHtml}
-            <div class="transaction-details">${tx.date}</div>
         `;
         transactionsList.appendChild(item);
     }
