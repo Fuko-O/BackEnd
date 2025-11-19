@@ -226,33 +226,42 @@ h3 {
     margin-top: 20px;
 }
 
-/* --- MODALE --- */
+/* --- MODALE (CORRIGÉ) --- */
 .modal-backdrop {
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(5px);
+    position: fixed;           /* OBLIGATOIRE : Pour flotter au-dessus de tout */
+    top: 0; 
+    left: 0;
+    width: 100%; 
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8); /* Fond sombre */
+    backdrop-filter: blur(5px);     /* Effet de flou */
+    z-index: 2000;             /* S'assure qu'elle est AU-DESSUS de tout le reste */
+    
+    /* C'EST ICI QUE ÇA MANQUAIT : */
+    display: none;             /* Caché par défaut */
+    align-items: center;       /* Centre verticalement */
+    justify-content: center;   /* Centre horizontalement */
+}
+
+/* Cette classe est ajoutée par le Javascript quand on clique */
+.modal-backdrop.visible {
+    display: flex;             /* Devient visible (flexbox pour centrer) */
 }
 
 .modal-content {
-    background: #1e293b; /* Fond un peu plus opaque pour lisibilité */
+    background: #1e293b; 
+    padding: 30px;
+    border-radius: 24px;
     border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    width: 90%;
+    max-width: 450px;
+    text-align: center;
 }
 
-.category-button {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid var(--glass-border);
-    color: var(--text-secondary);
-    transition: all 0.2s;
-}
-
-.category-button:hover, .category-button:active {
-    background: var(--accent-blue);
-    color: white;
-    border-color: var(--accent-blue);
-    box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
-}
-
-#modal-cancel-btn {
-    background: transparent;
-    border: 1px solid var(--glass-border);
-    color: var(--text-secondary);
+.category-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); /* 2 colonnes pour faire plus propre */
+    gap: 10px;
+    margin: 20px 0;
 }
